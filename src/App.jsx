@@ -7,7 +7,7 @@ import PredictionPanel from './components/PredictionPanel';
 import AnalysisNarrative from './components/AnalysisNarrative';
 import HistoricalAnalogs from './components/HistoricalAnalogs';
 import TimeframeChart from './components/TimeframeChart';
-import { fetchStockData, fetchBondData, fetchCommodityData } from './api/fetcher';
+import { fetchStockData, fetchBondData, fetchCommodityData, fetchIndexData } from './api/fetcher';
 import { getAnalysis } from './api/claude';
 import { runFractalAnalysis } from './engine/fractals';
 import { runBehavioralAnalysis } from './engine/behavioral';
@@ -45,6 +45,8 @@ export default function App() {
 
       if (type === 'stock') {
         rawData = await fetchStockData(sym);
+      } else if (type === 'index') {
+        rawData = await fetchIndexData(sym);
       } else if (type === 'bond') {
         const bondData = await fetchBondData();
         rawData = { daily: bondData.daily, hourly: null, fiveMin: null, quote: null };

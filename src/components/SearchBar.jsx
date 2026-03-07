@@ -2,12 +2,14 @@ import { useState } from 'react';
 
 const ASSET_TYPES = [
   { key: 'stock', label: 'Stock' },
+  { key: 'index', label: 'Index' },
   { key: 'bond', label: 'Bond' },
   { key: 'commodity', label: 'Commodity' },
 ];
 
 const PRESETS = {
   stock: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'SPY', 'QQQ', 'IWM', 'DIA'],
+  index: ['VIX'],
   bond: ['10-Year Treasury'],
   commodity: ['GCUSD', 'SIUSD', 'CLUSD', 'NGUSD', 'HGUSD'],
 };
@@ -59,8 +61,9 @@ export default function SearchBar({ onAnalyze, loading }) {
           onChange={e => setSymbol(e.target.value)}
           placeholder={
             assetType === 'stock' ? 'Enter ticker (e.g. NVDA)'
-              : assetType === 'bond' ? 'Bond analysis (press Analyze)'
-                : 'Enter commodity symbol (e.g. GCUSD)'
+              : assetType === 'index' ? 'Enter index symbol (e.g. VIX)'
+                : assetType === 'bond' ? 'Bond analysis (press Analyze)'
+                  : 'Enter commodity symbol (e.g. GCUSD)'
           }
           disabled={assetType === 'bond'}
           className="flex-1 bg-chaos-800 border border-chaos-600 rounded-lg px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-fractal-cyan focus:ring-1 focus:ring-fractal-cyan font-mono text-lg disabled:opacity-50"
