@@ -58,19 +58,31 @@ export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
   const fear = behavioralResults?.fear?.score ?? 0;
   const exhaustion = behavioralResults?.exhaustion?.score ?? 0;
 
+  // --- RECENT PRICE DIRECTION ---
+  // Fractal metrics are structure-only (direction-agnostic). We need to know
+  // which way prices are actually moving to interpret them correctly.
+  let recentReturn = 0;
+  if (dailyCloses && dailyCloses.length >= 10) {
+    const r10 = dailyCloses.slice(-10);
+    recentReturn = (r10[r10.length - 1] - r10[0]) / r10[0];
+  }
+  const pricesRising = recentReturn > 0.005;
+  const pricesFalling = recentReturn < -0.005;
+
   // --- RECENT-REGIME HURST ---
-  // Compute Hurst on last 60 bars to detect regime shifts the full-series misses
+  // Compute Hurst on last 40 bars (2 months) — responsive enough to catch
+  // a 1-2 week selloff while still having enough data for meaningful R/S.
   let recentH = H; // fallback to full-series
   let regimeChange = null;
 
-  if (dailyCloses && dailyCloses.length >= 60) {
-    const recentSlice = dailyCloses.slice(-60);
+  if (dailyCloses && dailyCloses.length >= 40) {
+    const recentSlice = dailyCloses.slice(-40);
     const recentHurst = computeHurst(recentSlice);
     if (recentHurst && typeof recentHurst.H === 'number') {
       recentH = recentHurst.H;
       const drift = recentH - H;
       // Significant divergence = regime change
-      if (Math.abs(drift) > 0.08) {
+      if (Math.abs(drift) > 0.06) {
         regimeChange = {
           fullH: H,
           recentH,
@@ -98,9 +110,17 @@ export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
 
   // --- PANIC ---
   // Low Hurst (anti-persistent chaos) + high fear + high box dimension
-  if (effectiveH < 0.4) scores.PANIC += 25;
-  else if (effectiveH < 0.45) scores.PANIC += 15;
-  else if (effectiveH < 0.5) scores.PANIC += 8;
+  // Also: high Hurst + falling prices = persistent downtrend (very bearish)
+  if (effectiveH < 0.4) {
+    scores.PANIC += 25;
+  } else if (effectiveH < 0.45) {
+    scores.PANIC += 15;
+  } else if (effectiveH < 0.5) {
+    scores.PANIC += 8;
+  } else if (effectiveH > 0.55 && pricesFalling) {
+    // Persistent trend + falling prices = strong bearish momentum
+    scores.PANIC += 15;
+  }
 
   if (D > 1.6) scores.PANIC += 20;
   else if (D > 1.5) scores.PANIC += 10;
@@ -123,17 +143,24 @@ export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
   if (behavioralResults?.commodity?.panicDump) scores.PANIC += 20;
 
   // --- EUPHORIA ---
-  // High Hurst (persistent trending) + greed + low box dimension (smooth)
-  if (effectiveH > 0.65) scores.EUPHORIA += 25;
-  else if (effectiveH > 0.55) scores.EUPHORIA += 15;
+  // High Hurst + smooth path + greed — BUT only if prices are actually rising.
+  // A persistent downtrend (high H) with smooth decline (low D) is NOT euphoria.
+  if (pricesRising) {
+    if (effectiveH > 0.65) scores.EUPHORIA += 25;
+    else if (effectiveH > 0.55) scores.EUPHORIA += 15;
 
-  if (D < 1.3) scores.EUPHORIA += 20;
-  else if (D < 1.4) scores.EUPHORIA += 10;
+    if (D < 1.3) scores.EUPHORIA += 20;
+    else if (D < 1.4) scores.EUPHORIA += 10;
 
+    if (L < 1.15) scores.EUPHORIA += 10;
+  } else if (!pricesFalling) {
+    // Flat market: give half credit for structural signals
+    if (effectiveH > 0.65) scores.EUPHORIA += 10;
+    if (D < 1.3) scores.EUPHORIA += 8;
+  }
+  // Greed is inherently directional — always counts
   if (greed > 50) scores.EUPHORIA += 30;
   else if (greed > 30) scores.EUPHORIA += 15;
-
-  if (L < 1.15) scores.EUPHORIA += 10;
 
   // Regime breaking down suppresses euphoria
   if (regimeChange?.direction === 'breaking_down') {
@@ -195,10 +222,11 @@ export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
   const [topKey, topScore] = entries[0];
   const [, secondScore] = entries[1];
 
-  // Confidence: gap between top and second
+  // Confidence: based on score magnitude + margin over second place
+  // Capped at 85% — mood classification is inherently uncertain
   const maxPossible = 100;
   const gap = topScore - secondScore;
-  const confidence = Math.min(100, Math.round((topScore / maxPossible) * 60 + gap));
+  const confidence = Math.min(85, Math.round((topScore / maxPossible) * 50 + gap * 0.8));
 
   return {
     mood: MOODS[topKey],
