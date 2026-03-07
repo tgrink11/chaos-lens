@@ -131,9 +131,9 @@ export default function App() {
             <div>
               <h1 className="text-3xl font-bold font-mono tracking-tight">
                 <span className="text-fractal-cyan">Chaos</span>
-                <span className="text-gray-100"> Lens</span>
+                <span className="text-gray-100"> Report</span>
               </h1>
-              <p className="text-sm text-gray-500 mt-1">Fractal Geometry Market Analyzer</p>
+              <p className="text-sm text-gray-500 mt-1">15 to 62 Day Insights of Price Movement</p>
             </div>
             {symbol && (
               <div className="flex items-center gap-4">
@@ -227,7 +227,7 @@ export default function App() {
 
           {/* Footer disclaimer */}
           <div className="text-center text-xs text-gray-600 pt-4 border-t border-chaos-700">
-            Chaos Lens uses fractal geometry for educational analysis only. Not financial advice. Past fractal patterns do not guarantee future results.
+            Chaos Report uses fractal geometry for educational analysis only. Not financial advice. Past fractal patterns do not guarantee future results.
           </div>
         </div>
       )}
@@ -238,7 +238,7 @@ export default function App() {
           <div className="text-6xl mb-4 opacity-20">◇</div>
           <h2 className="text-xl text-gray-400 font-mono">Enter a ticker to begin fractal analysis</h2>
           <p className="text-sm text-gray-600 mt-2 max-w-md mx-auto">
-            Chaos Lens computes Hurst exponents, box-counting dimensions, and lacunarity
+            Chaos Report computes Hurst exponents, box-counting dimensions, and lacunarity
             across daily, hourly, and 5-minute timeframes to decode market psychology.
           </p>
         </div>
