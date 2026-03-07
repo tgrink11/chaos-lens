@@ -16,6 +16,8 @@ import { predictBreak, predictHorizons } from './engine/prediction';
 import { findAnalogs } from './engine/analogs';
 import DirectionalOutlook from './components/DirectionalOutlook';
 import PrintButton from './components/PrintButton';
+import BacktestResults from './components/BacktestResults';
+import { runBacktestAsync } from './engine/backtest';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -23,6 +25,9 @@ export default function App() {
   const [symbol, setSymbol] = useState('');
   const [assetType, setAssetType] = useState('');
   const [results, setResults] = useState(null);
+  const [backtestResult, setBacktestResult] = useState(null);
+  const [backtestLoading, setBacktestLoading] = useState(false);
+  const [backtestProgress, setBacktestProgress] = useState(0);
 
   const handleAnalyze = useCallback(async (sym, type) => {
     setLoading(true);
@@ -30,6 +35,9 @@ export default function App() {
     setSymbol(sym);
     setAssetType(type);
     setResults(null);
+    setBacktestResult(null);
+    setBacktestLoading(false);
+    setBacktestProgress(0);
 
     try {
       // Step 1: Fetch data
@@ -89,7 +97,16 @@ export default function App() {
       };
       setResults(partialResults);
 
-      // Step 7: Get Claude AI analysis (async, update when ready)
+      // Step 8: Launch walk-forward backtest (async, non-blocking)
+      setBacktestLoading(true);
+      runBacktestAsync(rawData.daily, type, yieldData, {
+        onProgress: (pct) => setBacktestProgress(pct),
+      }).then(result => {
+        setBacktestResult(result);
+        setBacktestLoading(false);
+      });
+
+      // Step 9: Get Claude AI analysis (async, update when ready)
       const analysis = await getAnalysis(
         sym, type, fractalResults, behavioralResults, moodResult, predictionResult, analogResults
       );
@@ -199,6 +216,14 @@ export default function App() {
 
           {/* Row 5: AI Analysis */}
           <AnalysisNarrative analysis={results.analysis} />
+
+          {/* Row 6: Backtest Results */}
+          <BacktestResults
+            backtestResult={backtestResult}
+            symbol={symbol}
+            loading={backtestLoading}
+            progress={backtestProgress}
+          />
 
           {/* Footer disclaimer */}
           <div className="text-center text-xs text-gray-600 pt-4 border-t border-chaos-700">
