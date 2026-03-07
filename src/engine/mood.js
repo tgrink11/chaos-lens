@@ -165,6 +165,25 @@ export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
 
   if (fear < 20 && greed < 20 && exhaustion < 20) scores.GRIND += 20;
 
+  // --- DIRECT PRICE MOMENTUM ---
+  // Fractals measure structure, not direction. A persistent downtrend has high H
+  // just like a persistent uptrend. We must check what prices are ACTUALLY doing.
+  if (dailyCloses && dailyCloses.length >= 10) {
+    const recent10 = dailyCloses.slice(-10);
+    const ret10 = (recent10[recent10.length - 1] - recent10[0]) / recent10[0];
+
+    if (ret10 < -0.03) {
+      // 3%+ decline in 10 days: can't be euphoric when prices are falling hard
+      scores.EUPHORIA -= 25;
+      scores.PANIC += 20;
+    } else if (ret10 < -0.015) {
+      scores.EUPHORIA -= 12;
+      scores.PANIC += 10;
+    } else if (ret10 > 0.05) {
+      scores.EUPHORIA += 10;
+    }
+  }
+
   // Ensure no negative scores
   for (const key of Object.keys(scores)) {
     scores[key] = Math.max(0, scores[key]);

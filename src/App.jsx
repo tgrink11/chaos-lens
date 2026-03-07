@@ -70,8 +70,8 @@ export default function App() {
       // Step 4: Classify mood (pass daily closes for recent-regime detection)
       const moodResult = classifyMood(fractalResults, behavioralResults, rawData.daily.close);
 
-      // Step 5: Predict next break
-      const predictionResult = predictBreak(fractalResults, behavioralResults, moodResult);
+      // Step 5: Predict next break (pass daily closes for directional awareness)
+      const predictionResult = predictBreak(fractalResults, behavioralResults, moodResult, rawData.daily.close);
 
       // Step 6: Find historical analogs
       const currentSignature = {

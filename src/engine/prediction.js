@@ -36,7 +36,7 @@ const PREDICTIONS = {
  * @param {Object} moodResult - from mood.js
  * @returns {{ prediction: Object, confidence: number, reasoning: string[] }}
  */
-export function predictBreak(fractalResults, behavioralResults, moodResult) {
+export function predictBreak(fractalResults, behavioralResults, moodResult, dailyCloses) {
   const primary = fractalResults?.primary;
   if (!primary) {
     return {
@@ -55,22 +55,46 @@ export function predictBreak(fractalResults, behavioralResults, moodResult) {
   const exhaustion = behavioralResults?.exhaustion?.score ?? 0;
   const moodKey = moodResult?.mood?.key ?? 'GRIND';
 
+  // Determine recent price direction — HIGH HURST MEANS PERSISTENT, NOT BULLISH
+  // A persistent downtrend has high H too. We must check direction.
+  let recentReturn = 0;
+  if (dailyCloses && dailyCloses.length >= 15) {
+    const recent = dailyCloses.slice(-15);
+    recentReturn = (recent[recent.length - 1] - recent[0]) / recent[0];
+  }
+  const trendingUp = recentReturn > 0.005;
+  const trendingDown = recentReturn < -0.005;
+
   const scores = { THRUST_UP: 0, CASCADE_DOWN: 0, CONSOLIDATION: 0 };
   const reasoning = [];
 
-  // --- THRUST UP signals ---
-  // Rising Hurst = increasing persistence = momentum building
+  // --- HIGH HURST: PERSISTENT TREND (direction matters!) ---
   if (H > 0.6) {
-    scores.THRUST_UP += 25;
-    reasoning.push(`Hurst ${H.toFixed(2)} shows strong trend persistence`);
+    if (trendingUp) {
+      scores.THRUST_UP += 25;
+      reasoning.push(`Hurst ${H.toFixed(2)} persistent + uptrend → bullish momentum`);
+    } else if (trendingDown) {
+      scores.CASCADE_DOWN += 25;
+      reasoning.push(`Hurst ${H.toFixed(2)} persistent + downtrend → bearish momentum`);
+    } else {
+      scores.CONSOLIDATION += 10;
+    }
   } else if (H > 0.55) {
-    scores.THRUST_UP += 10;
+    if (trendingUp) scores.THRUST_UP += 10;
+    else if (trendingDown) scores.CASCADE_DOWN += 10;
   }
 
-  // Dropping box dimension = path smoothing = breakout forming
+  // Dropping box dimension = smooth price path
   if (D < 1.3) {
-    scores.THRUST_UP += 20;
-    reasoning.push(`Box dimension ${D.toFixed(2)} — price path smoothing toward breakout`);
+    if (trendingUp) {
+      scores.THRUST_UP += 20;
+      reasoning.push(`Box dimension ${D.toFixed(2)} — smooth uptrend, breakout forming`);
+    } else if (trendingDown) {
+      scores.CASCADE_DOWN += 20;
+      reasoning.push(`Box dimension ${D.toFixed(2)} — smooth decline, further downside risk`);
+    } else {
+      scores.THRUST_UP += 8;
+    }
   }
 
   // Stealth build → thrust up is the classic sequence
@@ -79,19 +103,23 @@ export function predictBreak(fractalResults, behavioralResults, moodResult) {
     reasoning.push('Stealth accumulation detected — precursor to thrust');
   }
 
-  // Exhaustion + low fear = coiling spring, likely up
+  // Exhaustion + low fear = coiling spring
   if (exhaustion > 40 && fear < 20) {
-    scores.THRUST_UP += 15;
-    reasoning.push('Volatility compression with no fear — spring coiling');
+    if (trendingDown) {
+      scores.CASCADE_DOWN += 8;
+    } else {
+      scores.THRUST_UP += 15;
+      reasoning.push('Volatility compression with no fear — spring coiling');
+    }
   }
 
-  // Moderate greed without extreme = healthy momentum
-  if (greed > 20 && greed < 60) {
+  // Moderate greed without extreme = healthy momentum (only if trending up)
+  if (greed > 20 && greed < 60 && !trendingDown) {
     scores.THRUST_UP += 10;
   }
 
   // --- CASCADE DOWN signals ---
-  // Hurst dropping below 0.5 = anti-persistence = trend breaking
+  // Low Hurst = anti-persistence = mean reversion
   if (H < 0.4) {
     scores.CASCADE_DOWN += 25;
     reasoning.push(`Hurst ${H.toFixed(2)} — anti-persistent, mean reversion dominating`);
@@ -119,10 +147,24 @@ export function predictBreak(fractalResults, behavioralResults, moodResult) {
     scores.CASCADE_DOWN += 10;
   }
 
+  // Direct price momentum — strong recent declines bias cascade
+  if (recentReturn < -0.05) {
+    scores.CASCADE_DOWN += 15;
+    reasoning.push(`Price down ${(recentReturn * 100).toFixed(1)}% recently — selling pressure`);
+  } else if (recentReturn < -0.02) {
+    scores.CASCADE_DOWN += 8;
+  }
+
   // Bond inversion = macro headwinds
   if (behavioralResults?.bond?.inverted) {
     scores.CASCADE_DOWN += 10;
     reasoning.push('Yield curve inverted — macro stress signal');
+  }
+
+  // Regime change from mood classifier
+  if (moodResult?.regimeChange?.direction === 'breaking_down') {
+    scores.CASCADE_DOWN += 12;
+    reasoning.push('Regime shift detected — trend structure weakening');
   }
 
   // --- CONSOLIDATION signals ---
@@ -311,14 +353,23 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
   let shortBull = 0, shortBear = 0;
 
   if (shortMetrics) {
-    // Trending = bullish short-term (momentum continues)
-    if (shortMetrics.H > 0.58) shortBull += 20;
-    else if (shortMetrics.H > 0.52) shortBull += 8;
-    if (shortMetrics.H < 0.42) shortBear += 20;
-    else if (shortMetrics.H < 0.48) shortBear += 8;
+    // HIGH HURST = PERSISTENT, NOT BULLISH. Direction must be checked.
+    if (shortMetrics.H > 0.58) {
+      if (momentum.recentReturn >= 0) shortBull += 20;
+      else shortBear += 20; // Persistent DOWNTREND
+    } else if (shortMetrics.H > 0.52) {
+      if (momentum.recentReturn >= 0) shortBull += 8;
+      else shortBear += 8;
+    }
+    if (shortMetrics.H < 0.42) shortBear += 15; // Anti-persistent = reversal risk
+    else if (shortMetrics.H < 0.48) shortBear += 6;
 
-    if (shortMetrics.D < 1.35) shortBull += 12;
-    if (shortMetrics.D > 1.6) shortBear += 12;
+    // Smooth path (low D) amplifies the current direction
+    if (shortMetrics.D < 1.35) {
+      if (momentum.recentReturn >= 0) shortBull += 12;
+      else shortBear += 12;
+    }
+    if (shortMetrics.D > 1.6) shortBear += 12; // Chaos = breakdown risk
 
     if (shortMetrics.L > 1.5 && fear > 25) shortBear += 10;
     if (shortMetrics.L > 1.5 && greed > 25) shortBull += 10;
@@ -348,8 +399,14 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
     else shortBear += 8;
   }
 
-  if (moodKey === 'EUPHORIA') shortBull += 10;
+  // Mood bonuses — but suppress EUPHORIA bonus if prices are actually falling
+  if (moodKey === 'EUPHORIA' && momentum.recentReturn >= 0) shortBull += 10;
   if (moodKey === 'PANIC') shortBear += 15;
+
+  // Regime change from mood classifier
+  if (moodResult?.regimeChange?.direction === 'breaking_down') {
+    shortBear += 12;
+  }
 
   const shortNet = shortBull - shortBear;
   const shortMax = Math.max(shortBull, shortBear, 1);
@@ -380,14 +437,32 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
 
   let medBull = 0, medBear = 0;
 
+  // For medium-term, compute a 62-day return for direction context
+  let medReturn = 0;
+  if (dailyCloses && dailyCloses.length >= 62) {
+    const slice62 = dailyCloses.slice(-62);
+    medReturn = (slice62[slice62.length - 1] - slice62[0]) / slice62[0];
+  } else if (dailyCloses && dailyCloses.length >= 30) {
+    const slice = dailyCloses.slice(-30);
+    medReturn = (slice[slice.length - 1] - slice[0]) / slice[0];
+  }
+
   if (fullMetrics) {
-    // Full-series Hurst: structural trend
-    if (fullMetrics.H > 0.6) medBull += 20;
-    else if (fullMetrics.H > 0.53) medBull += 10;
+    // Full-series Hurst: structural persistence — direction matters!
+    if (fullMetrics.H > 0.6) {
+      if (medReturn >= 0) medBull += 20;
+      else medBear += 15; // Persistent downtrend structurally
+    } else if (fullMetrics.H > 0.53) {
+      if (medReturn >= 0) medBull += 10;
+      else medBear += 8;
+    }
     if (fullMetrics.H < 0.4) medBear += 20;
     else if (fullMetrics.H < 0.47) medBear += 10;
 
-    if (fullMetrics.D < 1.3) medBull += 12;
+    if (fullMetrics.D < 1.3) {
+      if (medReturn >= 0) medBull += 12;
+      else medBear += 8;
+    }
     if (fullMetrics.D > 1.65) medBear += 12;
 
     // Structural lacunarity
@@ -411,11 +486,16 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
     else if (dimShift > 0.1) medBear += 8;
   }
 
-  // Mood is more structural for medium-term
-  if (moodKey === 'EUPHORIA') medBull += 8;
+  // Mood is more structural for medium-term — but only trust EUPHORIA if prices confirm
+  if (moodKey === 'EUPHORIA' && medReturn >= 0) medBull += 8;
   if (moodKey === 'PANIC') medBear += 12;
   if (moodKey === 'STEALTH_BUILD') medBull += 15;
   if (moodKey === 'GRIND') { /* neutral, no bias */ }
+
+  // Regime change from mood classifier
+  if (moodResult?.regimeChange?.direction === 'breaking_down') {
+    medBear += 10;
+  }
 
   // Historical analogs are the KEY differentiator for medium-term
   if (analogResults?.consensus) {
