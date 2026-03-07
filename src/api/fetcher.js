@@ -189,47 +189,36 @@ export async function fetchCommodityData(symbol) {
 }
 
 /**
- * Fetch index data (VIX, etc.) from TwelveData
- * Indices aren't available on FMP's stock endpoints, so we use TwelveData exclusively.
+ * Fetch index data (VIX, etc.) from FMP
+ * FMP uses ^VIX format for indices. No intraday available for indices.
  */
 export async function fetchIndexData(symbol) {
   const results = { daily: null, hourly: null, fiveMin: null, quote: null };
 
-  const [dailyRes, hourlyRes, fiveMinRes] = await Promise.allSettled([
-    // Daily — last 2 years
-    fetchJSON(`/api/twelvedata?endpoint=time_series&symbol=${symbol}&interval=1day&outputsize=500`),
-    // Hourly
-    fetchJSON(`/api/twelvedata?endpoint=time_series&symbol=${symbol}&interval=1h&outputsize=200`),
-    // 5-min
-    fetchJSON(`/api/twelvedata?endpoint=time_series&symbol=${symbol}&interval=5min&outputsize=200`),
+  // FMP uses ^PREFIX format for indices (e.g. VIX → ^VIX)
+  const fmpSymbol = symbol.startsWith('^') ? symbol : `^${symbol}`;
+  const encodedSymbol = encodeURIComponent(fmpSymbol);
+
+  const [dailyRes, quoteRes] = await Promise.allSettled([
+    // Daily — last 2 years from FMP
+    fetchJSON(`/api/fmp?path=v3/historical-price-full/${encodedSymbol}&from=${getDateStr(-730)}&to=${getDateStr(0)}`),
+    // Live quote
+    fetchJSON(`/api/fmp?path=v3/quote/${encodedSymbol}`),
   ]);
 
-  if (dailyRes.status === 'fulfilled' && dailyRes.value?.values) {
-    results.daily = normalizeOHLCV(dailyRes.value.values, 'datetime');
+  // Daily
+  if (dailyRes.status === 'fulfilled') {
+    const data = dailyRes.value;
+    const historical = data?.historical || data;
+    if (Array.isArray(historical)) {
+      results.daily = normalizeOHLCV(historical);
+    }
   }
 
-  if (hourlyRes.status === 'fulfilled' && hourlyRes.value?.values) {
-    results.hourly = normalizeOHLCV(hourlyRes.value.values, 'datetime');
-  }
-
-  if (fiveMinRes.status === 'fulfilled' && fiveMinRes.value?.values) {
-    results.fiveMin = normalizeOHLCV(fiveMinRes.value.values, 'datetime');
-  }
-
-  // Build a quote-like object from the latest daily bar
-  if (results.daily?.close?.length) {
-    const n = results.daily.close.length;
-    const price = results.daily.close[n - 1];
-    const prevPrice = n > 1 ? results.daily.close[n - 2] : price;
-    const change = price - prevPrice;
-    const changePct = prevPrice > 0 ? (change / prevPrice) * 100 : 0;
-    results.quote = {
-      price,
-      change,
-      changesPercentage: changePct,
-      symbol,
-      name: symbol,
-    };
+  // Quote
+  if (quoteRes.status === 'fulfilled') {
+    const data = quoteRes.value;
+    results.quote = Array.isArray(data) ? data[0] : data;
   }
 
   return results;
