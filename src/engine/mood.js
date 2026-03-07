@@ -2,7 +2,12 @@
  * Mood Classifier — synthesizes fractal metrics + behavioral signals into a single mood
  *
  * Moods: PANIC | EUPHORIA | STEALTH_BUILD | GRIND
+ *
+ * v2: Uses recent-regime Hurst (last 60 bars) to detect regime changes
+ *     that the full-series Hurst masks.
  */
+
+import { computeHurst } from './hurst.js';
 
 const MOODS = {
   PANIC: {
@@ -35,12 +40,13 @@ const MOODS = {
  * Classify the current market mood
  * @param {Object} fractalResults - from fractals.js
  * @param {Object} behavioralResults - from behavioral.js
- * @returns {{ mood: Object, confidence: number, scores: Object }}
+ * @param {number[]} [dailyCloses] - raw daily close prices for recent-regime computation
+ * @returns {{ mood: Object, confidence: number, scores: Object, regimeChange: Object|null }}
  */
-export function classifyMood(fractalResults, behavioralResults) {
+export function classifyMood(fractalResults, behavioralResults, dailyCloses) {
   const primary = fractalResults?.primary;
   if (!primary) {
-    return { mood: MOODS.GRIND, confidence: 0, scores: {} };
+    return { mood: MOODS.GRIND, confidence: 0, scores: {}, regimeChange: null };
   }
 
   const H = primary.hurst?.H ?? 0.5;
@@ -52,6 +58,36 @@ export function classifyMood(fractalResults, behavioralResults) {
   const fear = behavioralResults?.fear?.score ?? 0;
   const exhaustion = behavioralResults?.exhaustion?.score ?? 0;
 
+  // --- RECENT-REGIME HURST ---
+  // Compute Hurst on last 60 bars to detect regime shifts the full-series misses
+  let recentH = H; // fallback to full-series
+  let regimeChange = null;
+
+  if (dailyCloses && dailyCloses.length >= 60) {
+    const recentSlice = dailyCloses.slice(-60);
+    const recentHurst = computeHurst(recentSlice);
+    if (recentHurst && typeof recentHurst.H === 'number') {
+      recentH = recentHurst.H;
+      const drift = recentH - H;
+      // Significant divergence = regime change
+      if (Math.abs(drift) > 0.08) {
+        regimeChange = {
+          fullH: H,
+          recentH,
+          drift: Math.round(drift * 1000) / 1000,
+          direction: drift > 0 ? 'trending_up' : 'breaking_down',
+          label: drift > 0
+            ? 'Recent trend strengthening vs history'
+            : 'Recent trend breaking down vs history',
+        };
+      }
+    }
+  }
+
+  // Use a blend of full-series and recent Hurst for scoring
+  // Recent gets 60% weight because we care about what's happening NOW
+  const effectiveH = H * 0.4 + recentH * 0.6;
+
   // Score each mood
   const scores = {
     PANIC: 0,
@@ -62,16 +98,23 @@ export function classifyMood(fractalResults, behavioralResults) {
 
   // --- PANIC ---
   // Low Hurst (anti-persistent chaos) + high fear + high box dimension
-  if (H < 0.4) scores.PANIC += 25;
-  else if (H < 0.45) scores.PANIC += 15;
+  if (effectiveH < 0.4) scores.PANIC += 25;
+  else if (effectiveH < 0.45) scores.PANIC += 15;
+  else if (effectiveH < 0.5) scores.PANIC += 8;
 
   if (D > 1.6) scores.PANIC += 20;
   else if (D > 1.5) scores.PANIC += 10;
 
-  if (fear > 50) scores.PANIC += 30;
-  else if (fear > 30) scores.PANIC += 15;
+  if (fear > 40) scores.PANIC += 30;
+  else if (fear > 20) scores.PANIC += 15;
+  else if (fear > 10) scores.PANIC += 5;
 
-  if (volL > 1.6) scores.PANIC += 15; // Volume clustering in sell-offs
+  if (volL > 1.6) scores.PANIC += 15;
+
+  // Regime breaking down amplifies panic
+  if (regimeChange?.direction === 'breaking_down') {
+    scores.PANIC += 20;
+  }
 
   // Bond inversion amplifies panic
   if (behavioralResults?.bond?.inverted) scores.PANIC += 15;
@@ -81,8 +124,8 @@ export function classifyMood(fractalResults, behavioralResults) {
 
   // --- EUPHORIA ---
   // High Hurst (persistent trending) + greed + low box dimension (smooth)
-  if (H > 0.65) scores.EUPHORIA += 25;
-  else if (H > 0.55) scores.EUPHORIA += 15;
+  if (effectiveH > 0.65) scores.EUPHORIA += 25;
+  else if (effectiveH > 0.55) scores.EUPHORIA += 15;
 
   if (D < 1.3) scores.EUPHORIA += 20;
   else if (D < 1.4) scores.EUPHORIA += 10;
@@ -90,16 +133,21 @@ export function classifyMood(fractalResults, behavioralResults) {
   if (greed > 50) scores.EUPHORIA += 30;
   else if (greed > 30) scores.EUPHORIA += 15;
 
-  if (L < 1.15) scores.EUPHORIA += 10; // Uniform trend
+  if (L < 1.15) scores.EUPHORIA += 10;
+
+  // Regime breaking down suppresses euphoria
+  if (regimeChange?.direction === 'breaking_down') {
+    scores.EUPHORIA -= 20;
+  }
 
   // --- STEALTH BUILD ---
   // Moderate Hurst + high lacunarity + low volume + low fear/greed
-  if (H > 0.45 && H < 0.6) scores.STEALTH_BUILD += 15;
+  if (effectiveH > 0.45 && effectiveH < 0.6) scores.STEALTH_BUILD += 15;
 
   if (L > 1.5) scores.STEALTH_BUILD += 25;
   else if (L > 1.3) scores.STEALTH_BUILD += 15;
 
-  if (volL > 1.4) scores.STEALTH_BUILD += 15; // Volume clustering
+  if (volL > 1.4) scores.STEALTH_BUILD += 15;
 
   if (fear < 15 && greed < 15) scores.STEALTH_BUILD += 20;
   if (exhaustion > 30) scores.STEALTH_BUILD += 15;
@@ -109,13 +157,18 @@ export function classifyMood(fractalResults, behavioralResults) {
 
   // --- GRIND ---
   // Hurst near 0.5 (random) + low box dim variation + low lacunarity + low signals
-  if (H > 0.45 && H < 0.55) scores.GRIND += 20;
+  if (effectiveH > 0.45 && effectiveH < 0.55) scores.GRIND += 20;
 
   if (D > 1.35 && D < 1.65) scores.GRIND += 15;
 
   if (L < 1.2) scores.GRIND += 15;
 
   if (fear < 20 && greed < 20 && exhaustion < 20) scores.GRIND += 20;
+
+  // Ensure no negative scores
+  for (const key of Object.keys(scores)) {
+    scores[key] = Math.max(0, scores[key]);
+  }
 
   // Find winner
   const entries = Object.entries(scores);
@@ -132,6 +185,7 @@ export function classifyMood(fractalResults, behavioralResults) {
     mood: MOODS[topKey],
     confidence: Math.max(0, Math.min(100, confidence)),
     scores,
+    regimeChange,
   };
 }
 

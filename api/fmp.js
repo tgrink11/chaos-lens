@@ -1,6 +1,6 @@
 const CACHE_TTL = {
   'sp500-constituent': 604800,
-  'historical-price-eod': 14400,
+  'historical-price-eod': 300,
   'treasury': 3600,
   'commodities': 3600,
   'quote': 120,

@@ -67,8 +67,8 @@ export default function App() {
       // Step 3: Run behavioral analysis
       const behavioralResults = runBehavioralAnalysis(rawData.daily, type, yieldData);
 
-      // Step 4: Classify mood
-      const moodResult = classifyMood(fractalResults, behavioralResults);
+      // Step 4: Classify mood (pass daily closes for recent-regime detection)
+      const moodResult = classifyMood(fractalResults, behavioralResults, rawData.daily.close);
 
       // Step 5: Predict next break
       const predictionResult = predictBreak(fractalResults, behavioralResults, moodResult);

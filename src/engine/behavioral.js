@@ -11,7 +11,7 @@
  * @param {number} lookback - candles to analyze (default 20)
  * @returns {{ score: number, signals: string[], intensity: string }}
  */
-export function detectGreed(data, lookback = 20) {
+export function detectGreed(data, lookback = 50) {
   const { open, high, low, close } = data;
   const n = Math.min(lookback, close.length);
   const signals = [];
@@ -25,24 +25,28 @@ export function detectGreed(data, lookback = 20) {
 
     if (totalRange === 0) continue;
 
+    // Recency weight: recent bars count more (1.0 to 2.0 linearly)
+    const progress = (i - (close.length - n)) / (n - 1 || 1);
+    const weight = 1.0 + progress;
+
     const wickRatio = upperWick / (body || 0.001);
     const wickPct = upperWick / totalRange;
 
     // Long upper wicks signal greed — buyers reaching too high
     if (wickRatio > 2.0) {
-      wickScore += 3;
+      wickScore += 3 * weight;
       signals.push(`Bar ${i}: upper wick ${wickRatio.toFixed(1)}x body — aggressive buying exhaustion`);
     } else if (wickRatio > 1.2) {
-      wickScore += 1.5;
+      wickScore += 1.5 * weight;
     }
 
     // Wick dominates the range
     if (wickPct > 0.6) {
-      wickScore += 2;
+      wickScore += 2 * weight;
     }
   }
 
-  const normalized = Math.min(100, (wickScore / n) * 50);
+  const normalized = Math.min(100, (wickScore / n) * 35);
 
   let intensity;
   if (normalized > 70) intensity = 'Extreme Greed';
@@ -60,7 +64,7 @@ export function detectGreed(data, lookback = 20) {
  * @param {number} lookback - candles to analyze
  * @returns {{ score: number, signals: string[], intensity: string }}
  */
-export function detectFear(data, lookback = 20) {
+export function detectFear(data, lookback = 50) {
   const { volume, close } = data;
   if (!volume || volume.length < lookback + 20) {
     return { score: 0, signals: [], intensity: 'No Data' };
@@ -72,6 +76,10 @@ export function detectFear(data, lookback = 20) {
 
   for (let i = close.length - n; i < close.length; i++) {
     if (i < 20) continue;
+
+    // Recency weight: recent bars count more (1.0 to 2.0 linearly)
+    const progress = (i - (close.length - n)) / (n - 1 || 1);
+    const weight = 1.0 + progress;
 
     // Rolling 20-bar volume mean and std
     const window = volume.slice(i - 20, i);
@@ -85,17 +93,17 @@ export function detectFear(data, lookback = 20) {
 
     // Volume spike + price decline = fear
     if (zScore > 2.5 && priceDown) {
-      fearScore += 4;
+      fearScore += 4 * weight;
       signals.push(`Bar ${i}: volume ${zScore.toFixed(1)}σ spike on decline — panic selling`);
     } else if (zScore > 2.0 && priceDown) {
-      fearScore += 2.5;
+      fearScore += 2.5 * weight;
       signals.push(`Bar ${i}: volume ${zScore.toFixed(1)}σ spike — capitulation risk`);
     } else if (zScore > 1.8) {
-      fearScore += 1;
+      fearScore += 1 * weight;
     }
   }
 
-  const normalized = Math.min(100, (fearScore / n) * 40);
+  const normalized = Math.min(100, (fearScore / n) * 30);
 
   let intensity;
   if (normalized > 70) intensity = 'Extreme Fear';
@@ -113,7 +121,7 @@ export function detectFear(data, lookback = 20) {
  * @param {number} lookback
  * @returns {{ score: number, signals: string[], intensity: string }}
  */
-export function detectExhaustion(data, lookback = 20) {
+export function detectExhaustion(data, lookback = 50) {
   const { high, low, close } = data;
   const n = Math.min(lookback, close.length);
   const signals = [];

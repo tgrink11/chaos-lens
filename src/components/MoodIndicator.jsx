@@ -1,7 +1,7 @@
 export default function MoodIndicator({ moodResult }) {
   if (!moodResult?.mood) return null;
 
-  const { mood, confidence, scores } = moodResult;
+  const { mood, confidence, scores, regimeChange } = moodResult;
 
   // Sort scores for bar chart
   const sortedScores = Object.entries(scores)
@@ -37,6 +37,24 @@ export default function MoodIndicator({ moodResult }) {
           Confidence: <span className="font-mono text-gray-300">{confidence}%</span>
         </div>
       </div>
+
+      {/* Regime change warning */}
+      {regimeChange && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${
+          regimeChange.direction === 'breaking_down'
+            ? 'bg-red-500/10 border-red-500/30 text-red-300'
+            : 'bg-green-500/10 border-green-500/30 text-green-300'
+        }`}>
+          <div className="flex items-center gap-2 font-semibold text-xs uppercase tracking-wider mb-1">
+            <span>{regimeChange.direction === 'breaking_down' ? '⚠' : '▲'}</span>
+            Regime Shift Detected
+          </div>
+          <div className="text-xs opacity-90">{regimeChange.label}</div>
+          <div className="text-xs opacity-70 mt-1 font-mono">
+            Full-series H: {regimeChange.fullH.toFixed(3)} → Recent 60-bar H: {regimeChange.recentH.toFixed(3)} (drift: {regimeChange.drift > 0 ? '+' : ''}{regimeChange.drift.toFixed(3)})
+          </div>
+        </div>
+      )}
 
       {/* Mood score bars */}
       <div className="space-y-2">

@@ -205,7 +205,7 @@ export async function runBacktestAsync(dailyData, assetType, yieldData, options 
     });
 
     const behavioralResults = runBehavioralAnalysis(slicedData, assetType, yieldData);
-    const moodResult = classifyMood(fractalResults, behavioralResults);
+    const moodResult = classifyMood(fractalResults, behavioralResults, slicedData.close);
 
     const currentSignature = {
       H: fractalResults.primary?.hurst?.H ?? 0.5,
