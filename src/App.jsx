@@ -12,8 +12,10 @@ import { getAnalysis } from './api/claude';
 import { runFractalAnalysis } from './engine/fractals';
 import { runBehavioralAnalysis } from './engine/behavioral';
 import { classifyMood } from './engine/mood';
-import { predictBreak } from './engine/prediction';
+import { predictBreak, predictHorizons } from './engine/prediction';
 import { findAnalogs } from './engine/analogs';
+import DirectionalOutlook from './components/DirectionalOutlook';
+import PrintButton from './components/PrintButton';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
@@ -71,6 +73,9 @@ export default function App() {
       };
       const analogResults = findAnalogs(rawData.daily.close, currentSignature);
 
+      // Step 7: Predict directional horizons (15-day, 62-day)
+      const horizonResults = predictHorizons(fractalResults, behavioralResults, moodResult, analogResults);
+
       // Set results immediately (before Claude call)
       const partialResults = {
         fractalResults,
@@ -78,6 +83,7 @@ export default function App() {
         moodResult,
         predictionResult,
         analogResults,
+        horizonResults,
         analysis: { text: null, model: null, error: null, loading: true },
         quote: rawData.quote,
       };
@@ -113,19 +119,22 @@ export default function App() {
               <p className="text-sm text-gray-500 mt-1">Fractal Geometry Market Analyzer</p>
             </div>
             {symbol && (
-              <div className="text-right">
-                <div className="text-xl font-mono font-bold text-gray-200">{symbol}</div>
-                <div className="text-xs text-gray-500 uppercase">{assetType}</div>
-                {results?.quote && (
-                  <div className="text-sm font-mono mt-0.5">
-                    <span className="text-gray-300">${results.quote.price?.toFixed(2)}</span>
-                    {results.quote.changesPercentage != null && (
-                      <span className={`ml-2 ${results.quote.changesPercentage >= 0 ? 'text-fractal-green' : 'text-fractal-red'}`}>
-                        {results.quote.changesPercentage >= 0 ? '+' : ''}{results.quote.changesPercentage?.toFixed(2)}%
-                      </span>
-                    )}
-                  </div>
-                )}
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="text-xl font-mono font-bold text-gray-200">{symbol}</div>
+                  <div className="text-xs text-gray-500 uppercase">{assetType}</div>
+                  {results?.quote && (
+                    <div className="text-sm font-mono mt-0.5">
+                      <span className="text-gray-300">${results.quote.price?.toFixed(2)}</span>
+                      {results.quote.changesPercentage != null && (
+                        <span className={`ml-2 ${results.quote.changesPercentage >= 0 ? 'text-fractal-green' : 'text-fractal-red'}`}>
+                          {results.quote.changesPercentage >= 0 ? '+' : ''}{results.quote.changesPercentage?.toFixed(2)}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {results && <PrintButton />}
               </div>
             )}
           </div>
@@ -133,7 +142,7 @@ export default function App() {
       </header>
 
       {/* Search */}
-      <section className="py-8">
+      <section className="py-8 no-print">
         <div className="max-w-6xl mx-auto px-4">
           <SearchBar onAnalyze={handleAnalyze} loading={loading} />
         </div>
@@ -167,6 +176,9 @@ export default function App() {
       {/* Results */}
       {results && (
         <div className="max-w-6xl mx-auto px-4 pb-16 space-y-6">
+          {/* Directional Outlook — plain-English summary for novice investors */}
+          <DirectionalOutlook horizons={results.horizonResults} symbol={symbol} />
+
           {/* Row 1: Fractal Metrics + Mood */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <FractalMetrics fractalResults={results.fractalResults} />

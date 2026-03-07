@@ -40,3 +40,46 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: #1a1a1a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-break {
+    break-inside: avoid;
+  }
+
+  /* Make cards readable on paper */
+  .bg-chaos-800, .bg-chaos-900 {
+    background: white !important;
+    border-color: #d1d5db !important;
+  }
+
+  .text-gray-100, .text-gray-200, .text-gray-300 {
+    color: #1a1a1a !important;
+  }
+
+  .text-gray-400, .text-gray-500 {
+    color: #4b5563 !important;
+  }
+
+  .border-chaos-600, .border-chaos-700 {
+    border-color: #d1d5db !important;
+  }
+
+  /* Keep colored indicators visible */
+  .text-fractal-green { color: #16a34a !important; }
+  .text-fractal-red { color: #dc2626 !important; }
+  .text-fractal-amber { color: #d97706 !important; }
+  .text-fractal-cyan { color: #0891b2 !important; }
+  .text-fractal-purple { color: #9333ea !important; }
+}
