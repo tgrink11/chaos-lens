@@ -235,6 +235,9 @@ export default function BacktestResults({ backtestResult, symbol, loading, progr
           {metrics.testPointCount} test points
         </span>
       </div>
+      <p className="text-xs text-gray-500 mb-1">
+        How accurate were the predictions historically? We ran the prediction engine at multiple points in the past using only data available at that time, then checked if the predicted direction matched what actually happened.
+      </p>
       <p className="text-xs text-gray-500 mb-5">
         Walk-forward test on {symbol} daily data
         {metrics.dateRange.first && metrics.dateRange.last

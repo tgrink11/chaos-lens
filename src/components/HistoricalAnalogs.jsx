@@ -5,7 +5,10 @@ export default function HistoricalAnalogs({ analogResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-4 font-mono">Historical Analogs</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Historical Analogs</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        We searched through this asset's own price history to find past periods where the fractal pattern looked like it does right now. The table below shows what happened next in those similar episodes — giving a data-driven sense of what may follow.
+      </p>
 
       {/* Consensus summary */}
       {consensus && (

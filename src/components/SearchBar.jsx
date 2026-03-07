@@ -7,7 +7,7 @@ const ASSET_TYPES = [
 ];
 
 const PRESETS = {
-  stock: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'SPY'],
+  stock: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'SPY', 'QQQ', 'IWM', 'DIA'],
   bond: ['10-Year Treasury'],
   commodity: ['GCUSD', 'SIUSD', 'CLUSD', 'NGUSD', 'HGUSD'],
 };

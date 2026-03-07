@@ -62,7 +62,10 @@ export default function FractalMetrics({ fractalResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-4 font-mono">Fractal Signature</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Fractal Signature</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        These three metrics measure how the price moves. <strong className="text-gray-400">Hurst</strong> shows if the price tends to keep trending or bounce back and forth. <strong className="text-gray-400">Box-Counting</strong> measures how smooth or jagged the price path is. <strong className="text-gray-400">Lacunarity</strong> detects gaps and clustering in the pattern.
+      </p>
       <div className="grid grid-cols-3 gap-4">
         <Gauge
           value={hurst.H}

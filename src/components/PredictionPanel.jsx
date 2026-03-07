@@ -5,7 +5,10 @@ export default function PredictionPanel({ predictionResult }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-4 font-mono">Next Break Prediction</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Next Break Prediction</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        Based on all the fractal and behavioral signals above, this predicts the most likely next significant move. <strong className="text-gray-400">Thrust Up</strong> = breakout higher, <strong className="text-gray-400">Cascade Down</strong> = sharp decline, <strong className="text-gray-400">Consolidation</strong> = sideways choppy action.
+      </p>
 
       <div className="flex items-center gap-4 mb-4">
         {/* Direction arrow */}

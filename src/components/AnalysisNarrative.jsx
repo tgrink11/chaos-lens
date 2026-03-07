@@ -6,7 +6,12 @@ export default function AnalysisNarrative({ analysis }) {
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-200 font-mono">AI Fractal Analysis</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-200 font-mono">AI Fractal Analysis</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            An AI reads all the fractal data, behavioral signals, and historical analogs above, then writes a plain-English interpretation of what it all means together.
+          </p>
+        </div>
         {model && (
           <span className="text-xs text-gray-500 font-mono bg-chaos-700 px-2 py-1 rounded">
             {model}

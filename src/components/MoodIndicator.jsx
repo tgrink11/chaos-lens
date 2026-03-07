@@ -17,6 +17,10 @@ export default function MoodIndicator({ moodResult }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Market Mood</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        Think of this as the market's emotional state right now. <strong className="text-gray-400">Panic</strong> means fear is driving prices down. <strong className="text-gray-400">Euphoria</strong> means greed is pushing prices up. <strong className="text-gray-400">Stealth Build</strong> means quiet accumulation is happening under the surface. <strong className="text-gray-400">Grind</strong> means the market is directionless.
+      </p>
       {/* Main mood display */}
       <div className="text-center mb-6">
         <div

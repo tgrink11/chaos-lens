@@ -68,7 +68,10 @@ export default function BehaviorCards({ behavioralResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-4 font-mono">Behavioral Signals</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Behavioral Signals</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        These detect what traders are actually doing. <strong className="text-gray-400">Greed</strong> shows when buyers are overreaching (long upper wicks on candles). <strong className="text-gray-400">Fear</strong> shows panic selling (volume spikes on down moves). <strong className="text-gray-400">Exhaustion</strong> shows when volatility is drying up, often right before a big move.
+      </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <BehaviorCard type="greed" data={behavioralResults.greed} />
         <BehaviorCard type="fear" data={behavioralResults.fear} />

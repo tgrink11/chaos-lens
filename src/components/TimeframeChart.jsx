@@ -29,7 +29,10 @@ export default function TimeframeChart({ fractalResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-4 font-mono">Multi-Timeframe Fractal Comparison</h2>
+      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Multi-Timeframe Fractal Comparison</h2>
+      <p className="text-xs text-gray-500 mb-4">
+        This compares the fractal metrics across different time scales (daily, hourly, 5-minute). When all timeframes show similar values, it means the pattern is consistent at every zoom level — a strong signal. When they disagree, the market behaves differently at different scales.
+      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricBar data={hurstData} label="Hurst (H)" color={METRIC_COLORS.hurst} domain={[0, 1]} refLine={0.5} />
