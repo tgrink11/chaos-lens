@@ -74,7 +74,7 @@ export default function App() {
       const analogResults = findAnalogs(rawData.daily.close, currentSignature);
 
       // Step 7: Predict directional horizons (15-day, 62-day)
-      const horizonResults = predictHorizons(fractalResults, behavioralResults, moodResult, analogResults);
+      const horizonResults = predictHorizons(fractalResults, behavioralResults, moodResult, analogResults, rawData.daily.close);
 
       // Set results immediately (before Claude call)
       const partialResults = {

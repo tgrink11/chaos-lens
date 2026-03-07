@@ -226,131 +226,226 @@ function pickSummary(direction, horizon) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function getMetrics(fractalResults, timeframeKey) {
-  const tf = fractalResults?.[timeframeKey];
-  if (!tf) return null;
+import { computeHurst } from './hurst.js';
+import { computeBoxDimension } from './boxcounting.js';
+import { computeLacunarity } from './lacunarity.js';
+
+/**
+ * Compute fractal metrics on a specific slice of price data
+ */
+function computeSliceMetrics(prices) {
+  if (!prices || prices.length < 20) return null;
   return {
-    H: tf.hurst?.H ?? 0.5,
-    D: tf.boxDim?.D ?? 1.5,
-    L: tf.lacunarity?.lambda ?? 1,
+    H: computeHurst(prices).H,
+    D: computeBoxDimension(prices).D,
+    L: computeLacunarity(prices).lambda,
   };
 }
 
 /**
- * Predict directional outlook for 15-day and 62-day horizons
- * @param {Object} fractalResults - from fractals.js
- * @param {Object} behavioralResults - from behavioral.js
- * @param {Object} moodResult - from mood.js
- * @param {Object} analogResults - from analogs.js
- * @returns {{ shortTerm: Object, mediumTerm: Object }}
+ * Analyze recent price momentum from raw daily closes
+ * Returns: { recentReturn, recentVolatility, trendStrength }
  */
-export function predictHorizons(fractalResults, behavioralResults, moodResult, analogResults) {
+function analyzeMomentum(closes) {
+  if (!closes || closes.length < 20) return { recentReturn: 0, recentVolatility: 0, trendStrength: 0 };
+
+  // 15-day return
+  const n = closes.length;
+  const recent15 = closes.slice(-15);
+  const recentReturn = recent15.length > 1
+    ? (recent15[recent15.length - 1] - recent15[0]) / recent15[0]
+    : 0;
+
+  // Recent volatility (15-day)
+  const returns = [];
+  for (let i = 1; i < recent15.length; i++) {
+    if (recent15[i - 1] > 0) returns.push(Math.log(recent15[i] / recent15[i - 1]));
+  }
+  const mean = returns.reduce((a, b) => a + b, 0) / (returns.length || 1);
+  const recentVolatility = Math.sqrt(returns.reduce((a, r) => a + (r - mean) ** 2, 0) / (returns.length || 1));
+
+  // Trend strength: ratio of net move to total path distance
+  let pathLength = 0;
+  for (let i = 1; i < recent15.length; i++) {
+    pathLength += Math.abs(recent15[i] - recent15[i - 1]);
+  }
+  const netMove = Math.abs(recent15[recent15.length - 1] - recent15[0]);
+  const trendStrength = pathLength > 0 ? netMove / pathLength : 0;
+
+  return { recentReturn, recentVolatility, trendStrength };
+}
+
+/**
+ * Predict directional outlook for 15-day and 62-day horizons
+ *
+ * KEY DIFFERENTIATION: Short-term uses recent 30-bar window fractals + momentum.
+ * Medium-term uses full-series fractals + analog consensus + structural signals.
+ * This ensures genuinely different results even from the same daily data.
+ */
+export function predictHorizons(fractalResults, behavioralResults, moodResult, analogResults, dailyCloses) {
   const greed = behavioralResults?.greed?.score ?? 0;
   const fear = behavioralResults?.fear?.score ?? 0;
   const exhaustion = behavioralResults?.exhaustion?.score ?? 0;
   const moodKey = moodResult?.mood?.key ?? 'GRIND';
 
-  // --- 15-DAY (short-term) ---
-  // Prefer intraday fractals; fall back to daily
-  const fast = getMetrics(fractalResults, 'fiveMin')
-    || getMetrics(fractalResults, 'hourly')
-    || getMetrics(fractalResults, 'daily');
+  // ============================================================
+  // 15-DAY: Recent window fractals + behavioral momentum
+  // ============================================================
+  // Compute fractals on just the RECENT 30 bars (captures current regime)
+  const recentSlice = dailyCloses?.slice(-30) || [];
+  const recentMetrics = computeSliceMetrics(recentSlice);
+
+  // Also try intraday if available
+  const intradayMetrics = fractalResults?.fiveMin
+    ? { H: fractalResults.fiveMin.hurst.H, D: fractalResults.fiveMin.boxDim.D, L: fractalResults.fiveMin.lacunarity.lambda }
+    : fractalResults?.hourly
+      ? { H: fractalResults.hourly.hurst.H, D: fractalResults.hourly.boxDim.D, L: fractalResults.hourly.lacunarity.lambda }
+      : null;
+
+  // Blend: prefer intraday, weight recent daily heavily
+  const shortMetrics = intradayMetrics || recentMetrics;
+
+  // Recent price momentum (directly observable)
+  const momentum = analyzeMomentum(dailyCloses);
 
   let shortBull = 0, shortBear = 0;
 
-  if (fast) {
-    // Persistent trend = bullish momentum
-    if (fast.H > 0.58) shortBull += 25;
-    else if (fast.H > 0.52) shortBull += 10;
-    if (fast.H < 0.42) shortBear += 25;
-    else if (fast.H < 0.48) shortBear += 10;
+  if (shortMetrics) {
+    // Trending = bullish short-term (momentum continues)
+    if (shortMetrics.H > 0.58) shortBull += 20;
+    else if (shortMetrics.H > 0.52) shortBull += 8;
+    if (shortMetrics.H < 0.42) shortBear += 20;
+    else if (shortMetrics.H < 0.48) shortBear += 8;
 
-    // Smooth path = breakout forming (bullish); chaotic = breakdown
-    if (fast.D < 1.35) shortBull += 15;
-    if (fast.D > 1.6) shortBear += 15;
+    if (shortMetrics.D < 1.35) shortBull += 12;
+    if (shortMetrics.D > 1.6) shortBear += 12;
 
-    // High lacunarity = clustering (can go either way, but with fear = bearish)
-    if (fast.L > 1.5 && fear > 30) shortBear += 10;
-    if (fast.L > 1.5 && greed > 30) shortBull += 10;
+    if (shortMetrics.L > 1.5 && fear > 25) shortBear += 10;
+    if (shortMetrics.L > 1.5 && greed > 25) shortBull += 10;
   }
 
-  // Behavioral signals matter more on short horizon
-  if (greed > 40) shortBull += 15;
-  if (fear > 40) shortBear += 20;
-  if (exhaustion > 50 && fear < 20) shortBull += 10; // coiling spring
+  // Recent momentum is a STRONG short-term signal
+  if (momentum.recentReturn > 0.05) shortBull += 20;
+  else if (momentum.recentReturn > 0.02) shortBull += 12;
+  else if (momentum.recentReturn < -0.05) shortBear += 20;
+  else if (momentum.recentReturn < -0.02) shortBear += 12;
 
-  // Mood influence
-  if (moodKey === 'EUPHORIA') shortBull += 15;
-  if (moodKey === 'PANIC') shortBear += 20;
-  if (moodKey === 'STEALTH_BUILD') shortBull += 10;
+  // Trend strength matters short-term (efficient path = continuation likely)
+  if (momentum.trendStrength > 0.6) {
+    if (momentum.recentReturn > 0) shortBull += 10;
+    else shortBear += 10;
+  }
+
+  // Behavioral signals hit harder short-term
+  if (greed > 50) shortBull += 15;
+  else if (greed > 30) shortBull += 8;
+  if (fear > 50) shortBear += 18;
+  else if (fear > 30) shortBear += 10;
+
+  // Exhaustion + compression = spring (short-term breakout, direction from momentum)
+  if (exhaustion > 40 && fear < 20) {
+    if (momentum.recentReturn >= 0) shortBull += 12;
+    else shortBear += 8;
+  }
+
+  if (moodKey === 'EUPHORIA') shortBull += 10;
+  if (moodKey === 'PANIC') shortBear += 15;
 
   const shortNet = shortBull - shortBear;
-  const shortTotal = shortBull + shortBear || 1;
+  const shortMax = Math.max(shortBull, shortBear, 1);
 
   let shortDirection, shortConfidence;
-  if (shortNet > 10) {
+  if (shortNet > 8) {
     shortDirection = 'bullish';
-    shortConfidence = Math.min(90, 50 + Math.round((shortNet / shortTotal) * 50));
-  } else if (shortNet < -10) {
+    shortConfidence = Math.min(90, 45 + Math.round((shortBull / shortMax) * 35 + Math.abs(shortNet) * 0.3));
+  } else if (shortNet < -8) {
     shortDirection = 'bearish';
-    shortConfidence = Math.min(90, 50 + Math.round((Math.abs(shortNet) / shortTotal) * 50));
+    shortConfidence = Math.min(90, 45 + Math.round((shortBear / shortMax) * 35 + Math.abs(shortNet) * 0.3));
   } else {
     shortDirection = 'neutral';
-    shortConfidence = Math.max(30, 50 - Math.abs(shortNet) * 2);
+    shortConfidence = Math.max(25, 45 - Math.abs(shortNet) * 2);
   }
 
-  // --- 62-DAY (medium-term) ---
-  // Prefer daily fractals
-  const slow = getMetrics(fractalResults, 'daily')
-    || getMetrics(fractalResults, 'hourly');
+  // ============================================================
+  // 62-DAY: Full-series structural fractals + analogs + macro
+  // ============================================================
+  // Use the FULL daily series (captures long-term structure)
+  const fullMetrics = fractalResults?.daily
+    ? { H: fractalResults.daily.hurst.H, D: fractalResults.daily.boxDim.D, L: fractalResults.daily.lacunarity.lambda }
+    : null;
+
+  // Also compute a medium-window (last 90 bars) for transition detection
+  const medSlice = dailyCloses?.slice(-90) || [];
+  const medWindowMetrics = computeSliceMetrics(medSlice);
 
   let medBull = 0, medBear = 0;
 
-  if (slow) {
-    if (slow.H > 0.6) medBull += 25;
-    else if (slow.H > 0.53) medBull += 12;
-    if (slow.H < 0.4) medBear += 25;
-    else if (slow.H < 0.47) medBear += 12;
+  if (fullMetrics) {
+    // Full-series Hurst: structural trend
+    if (fullMetrics.H > 0.6) medBull += 20;
+    else if (fullMetrics.H > 0.53) medBull += 10;
+    if (fullMetrics.H < 0.4) medBear += 20;
+    else if (fullMetrics.H < 0.47) medBear += 10;
 
-    if (slow.D < 1.3) medBull += 15;
-    if (slow.D > 1.65) medBear += 15;
+    if (fullMetrics.D < 1.3) medBull += 12;
+    if (fullMetrics.D > 1.65) medBear += 12;
 
-    // High lacunarity on daily = structural accumulation or distribution
-    if (slow.L > 1.5) {
-      if (moodKey === 'STEALTH_BUILD') medBull += 15;
-      else if (moodKey === 'PANIC') medBear += 15;
+    // Structural lacunarity
+    if (fullMetrics.L > 1.5) {
+      if (moodKey === 'STEALTH_BUILD') medBull += 12;
+      else if (moodKey === 'PANIC') medBear += 12;
     }
   }
 
-  // Structural mood matters more on medium horizon
-  if (moodKey === 'EUPHORIA') medBull += 10;
-  if (moodKey === 'PANIC') medBear += 15;
-  if (moodKey === 'STEALTH_BUILD') medBull += 15;
+  // Regime transition: compare recent-90 vs full-series Hurst
+  if (medWindowMetrics && fullMetrics) {
+    const hurstShift = medWindowMetrics.H - fullMetrics.H;
+    // If recent regime is MORE persistent than long-term = strengthening trend
+    if (hurstShift > 0.08) medBull += 12;
+    // If recent regime is LESS persistent = weakening, potential reversal
+    else if (hurstShift < -0.08) medBear += 12;
 
-  // Historical analogs carry weight for medium-term
+    // Dimension divergence: recent getting smoother = trend building
+    const dimShift = medWindowMetrics.D - fullMetrics.D;
+    if (dimShift < -0.1) medBull += 8;
+    else if (dimShift > 0.1) medBear += 8;
+  }
+
+  // Mood is more structural for medium-term
+  if (moodKey === 'EUPHORIA') medBull += 8;
+  if (moodKey === 'PANIC') medBear += 12;
+  if (moodKey === 'STEALTH_BUILD') medBull += 15;
+  if (moodKey === 'GRIND') { /* neutral, no bias */ }
+
+  // Historical analogs are the KEY differentiator for medium-term
   if (analogResults?.consensus) {
-    const { direction, avgReturn, confidence } = analogResults.consensus;
-    const analogWeight = Math.min(20, Math.round(confidence * 0.2));
+    const { direction, avgReturn, confidence: analogConf } = analogResults.consensus;
+    const analogWeight = Math.min(25, Math.round((analogConf || 0) * 0.25));
     if (direction === 'UP' && avgReturn > 0) medBull += analogWeight;
     else if (direction === 'DOWN' && avgReturn < 0) medBear += analogWeight;
   }
 
-  // Bond inversion = medium-term headwind
-  if (behavioralResults?.bond?.inverted) medBear += 10;
+  // Bond inversion = medium-term structural headwind
+  if (behavioralResults?.bond?.inverted) medBear += 12;
+  if (behavioralResults?.bond?.steepening) medBull += 8;
+
+  // Commodity hoarding = medium-term bullish for that commodity
+  if (behavioralResults?.commodity?.hoarding) medBull += 10;
+  if (behavioralResults?.commodity?.panicDump) medBear += 10;
 
   const medNet = medBull - medBear;
-  const medTotal = medBull + medBear || 1;
+  const medMax = Math.max(medBull, medBear, 1);
 
   let medDirection, medConfidence;
-  if (medNet > 10) {
+  if (medNet > 8) {
     medDirection = 'bullish';
-    medConfidence = Math.min(90, 50 + Math.round((medNet / medTotal) * 50));
-  } else if (medNet < -10) {
+    medConfidence = Math.min(90, 45 + Math.round((medBull / medMax) * 35 + Math.abs(medNet) * 0.3));
+  } else if (medNet < -8) {
     medDirection = 'bearish';
-    medConfidence = Math.min(90, 50 + Math.round((Math.abs(medNet) / medTotal) * 50));
+    medConfidence = Math.min(90, 45 + Math.round((medBear / medMax) * 35 + Math.abs(medNet) * 0.3));
   } else {
     medDirection = 'neutral';
-    medConfidence = Math.max(30, 50 - Math.abs(medNet) * 2);
+    medConfidence = Math.max(25, 45 - Math.abs(medNet) * 2);
   }
 
   return {
