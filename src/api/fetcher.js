@@ -224,6 +224,70 @@ export async function fetchIndexData(symbol) {
   return results;
 }
 
+/**
+ * Fetch the screener universe list (S&P 500 + small/mid-cap)
+ */
+export async function fetchScreenerList() {
+  return fetchJSON('/api/screener-list');
+}
+
+/**
+ * Lightweight fetch: daily OHLCV + quote only (no intraday)
+ * Used by screener to minimize API calls
+ */
+export async function fetchDailyOnly(symbol) {
+  const [dailyRes, quoteRes] = await Promise.allSettled([
+    fetchJSON(`/api/fmp?path=v3/historical-price-full/${encodeURIComponent(symbol)}&from=${getDateStr(-730)}&to=${getDateStr(0)}`),
+    fetchJSON(`/api/fmp?path=v3/quote/${encodeURIComponent(symbol)}`),
+  ]);
+
+  let daily = null;
+  let quote = null;
+
+  if (dailyRes.status === 'fulfilled') {
+    const data = dailyRes.value;
+    const historical = data?.historical || data;
+    if (Array.isArray(historical)) {
+      daily = normalizeOHLCV(historical);
+    }
+  }
+
+  if (quoteRes.status === 'fulfilled') {
+    const data = quoteRes.value;
+    quote = Array.isArray(data) ? data[0] : data;
+  }
+
+  return { daily, quote };
+}
+
+/**
+ * Fetch cached screener results from Supabase (via serverless endpoint)
+ * Returns { results, scannedAt, date } or { results: null }
+ */
+export async function fetchScreenerCache() {
+  try {
+    return await fetchJSON('/api/screener-cache');
+  } catch {
+    return { results: null };
+  }
+}
+
+/**
+ * Save screener results to Supabase cache
+ */
+export async function saveScreenerCache(results) {
+  try {
+    const resp = await fetch('/api/screener-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 function getDateStr(daysOffset) {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
