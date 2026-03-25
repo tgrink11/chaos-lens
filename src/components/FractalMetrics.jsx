@@ -14,7 +14,7 @@ function Gauge({ value, min, max, label, sublabel, color, unit = '' }) {
         <circle
           cx="70" cy="70" r="45"
           fill="none"
-          stroke="#1e293b"
+          stroke="#d0d5dd"
           strokeWidth="10"
           strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
           strokeLinecap="round"
@@ -34,16 +34,16 @@ function Gauge({ value, min, max, label, sublabel, color, unit = '' }) {
           style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}
         />
         {/* Value text */}
-        <text x="70" y="65" textAnchor="middle" className="fill-gray-100 text-2xl font-mono font-bold" fontSize="24">
+        <text x="70" y="65" textAnchor="middle" className="fill-[#1a1a1a] text-2xl font-mono font-bold" fontSize="24">
           {typeof value === 'number' ? value.toFixed(3) : '—'}
         </text>
-        <text x="70" y="85" textAnchor="middle" className="fill-gray-400 text-xs" fontSize="11">
+        <text x="70" y="85" textAnchor="middle" className="fill-[#667085] text-xs" fontSize="11">
           {unit}
         </text>
       </svg>
       <div className="text-center -mt-2">
-        <div className="text-sm font-semibold text-gray-200">{label}</div>
-        <div className="text-xs text-gray-400 mt-0.5">{sublabel}</div>
+        <div className="text-sm font-semibold text-[#1a1a1a]">{label}</div>
+        <div className="text-xs text-[#667085] mt-0.5">{sublabel}</div>
       </div>
     </div>
   );
@@ -56,15 +56,15 @@ export default function FractalMetrics({ fractalResults }) {
   const { hurst, boxDim, lacunarity } = p;
 
   // Color based on interpretation
-  const hurstColor = hurst.H > 0.6 ? '#22c55e' : hurst.H < 0.4 ? '#ef4444' : '#f59e0b';
-  const dimColor = boxDim.D < 1.3 ? '#22c55e' : boxDim.D > 1.6 ? '#ef4444' : '#f59e0b';
-  const lacColor = lacunarity.lambda > 1.5 ? '#a855f7' : lacunarity.lambda < 1.15 ? '#06b6d4' : '#f59e0b';
+  const hurstColor = hurst.H > 0.6 ? '#0a7a2e' : hurst.H < 0.4 ? '#912323' : '#b45309';
+  const dimColor = boxDim.D < 1.3 ? '#0a7a2e' : boxDim.D > 1.6 ? '#912323' : '#b45309';
+  const lacColor = lacunarity.lambda > 1.5 ? '#7c3aed' : lacunarity.lambda < 1.15 ? '#114f78' : '#b45309';
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Fractal Signature</h2>
-      <p className="text-xs text-gray-500 mb-4">
-        These three metrics measure how the price moves. <strong className="text-gray-400">Hurst</strong> shows if the price tends to keep trending or bounce back and forth. <strong className="text-gray-400">Box-Counting</strong> measures how smooth or jagged the price path is. <strong className="text-gray-400">Lacunarity</strong> detects gaps and clustering in the pattern.
+      <h2 className="text-lg font-semibold text-[#1a1a1a] mb-1 font-mono">Fractal Signature</h2>
+      <p className="text-xs text-[#667085] mb-4">
+        These three metrics measure how the price moves. <strong className="text-[#667085]">Hurst</strong> shows if the price tends to keep trending or bounce back and forth. <strong className="text-[#667085]">Box-Counting</strong> measures how smooth or jagged the price path is. <strong className="text-[#667085]">Lacunarity</strong> detects gaps and clustering in the pattern.
       </p>
       <div className="grid grid-cols-3 gap-4">
         <Gauge
@@ -96,7 +96,7 @@ export default function FractalMetrics({ fractalResults }) {
       {/* Self-similarity */}
       {fractalResults.selfSimilarity && (
         <div className="mt-4 pt-4 border-t border-chaos-600 text-center">
-          <span className="text-xs text-gray-400">Cross-Timeframe Self-Similarity: </span>
+          <span className="text-xs text-[#667085]">Cross-Timeframe Self-Similarity: </span>
           <span className={`text-sm font-mono font-semibold ${
             fractalResults.selfSimilarity.score > 0.7 ? 'text-fractal-green'
               : fractalResults.selfSimilarity.score > 0.4 ? 'text-fractal-amber'
@@ -104,7 +104,7 @@ export default function FractalMetrics({ fractalResults }) {
           }`}>
             {(fractalResults.selfSimilarity.score * 100).toFixed(0)}%
           </span>
-          <span className="text-xs text-gray-500 ml-2">
+          <span className="text-xs text-[#667085] ml-2">
             {fractalResults.selfSimilarity.label}
           </span>
         </div>

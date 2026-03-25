@@ -17,9 +17,16 @@ import { findAnalogs } from './engine/analogs';
 import DirectionalOutlook from './components/DirectionalOutlook';
 import PrintButton from './components/PrintButton';
 import BacktestResults from './components/BacktestResults';
+import Guide from './components/Guide';
+import EmailGate from './components/EmailGate';
+import ScreenerTab from './components/ScreenerTab';
 import { runBacktestAsync } from './engine/backtest';
 
 export default function App() {
+  const [emailUnlocked, setEmailUnlocked] = useState(
+    () => !!localStorage.getItem('chaos_report_email')
+  );
+  const [activeTab, setActiveTab] = useState('stock');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [symbol, setSymbol] = useState('');
@@ -28,6 +35,7 @@ export default function App() {
   const [backtestResult, setBacktestResult] = useState(null);
   const [backtestLoading, setBacktestLoading] = useState(false);
   const [backtestProgress, setBacktestProgress] = useState(0);
+  const [showGuide, setShowGuide] = useState(false);
 
   const handleAnalyze = useCallback(async (sym, type) => {
     setLoading(true);
@@ -124,6 +132,23 @@ export default function App() {
     }
   }, []);
 
+  // When screener row is clicked, switch to stock tab and analyze
+  const handleScreenerSelect = useCallback((sym) => {
+    setActiveTab('stock');
+    handleAnalyze(sym, 'stock');
+  }, [handleAnalyze]);
+
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+  }, []);
+
+  // Email gate — blocks entire app until email submitted
+  if (!emailUnlocked) {
+    return <EmailGate onUnlocked={() => setEmailUnlocked(true)} />;
+  }
+
+  const isScreener = activeTab === 'screener';
+
   return (
     <div className="min-h-screen bg-chaos-900">
       {/* Header */}
@@ -133,18 +158,24 @@ export default function App() {
             <div>
               <h1 className="text-3xl font-bold font-mono tracking-tight">
                 <span className="text-fractal-cyan">Chaos</span>
-                <span className="text-gray-100"> Report</span>
+                <span className="text-[#1a1a1a]"> Report</span>
               </h1>
-              <p className="text-sm text-gray-500 mt-1">15 to 62 Day Insights of Price Movement</p>
+              <p className="text-sm text-[#667085] mt-1">15 to 62 Day Insights of Price Movement</p>
+              <button
+                onClick={() => setShowGuide(g => !g)}
+                className="text-xs text-fractal-cyan hover:text-[#0d3d5e] mt-1 no-print"
+              >
+                {showGuide ? 'Close Guide' : 'Read the Guide'}
+              </button>
             </div>
-            {symbol && (
+            {symbol && !isScreener && (
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-xl font-mono font-bold text-gray-200">{symbol}</div>
-                  <div className="text-xs text-gray-500 uppercase">{assetType}</div>
+                  <div className="text-xl font-mono font-bold text-[#1a1a1a]">{symbol}</div>
+                  <div className="text-xs text-[#667085] uppercase">{assetType}</div>
                   {results?.quote && (
                     <div className="text-sm font-mono mt-0.5">
-                      <span className="text-gray-300">${results.quote.price?.toFixed(2)}</span>
+                      <span className="text-[#344054]">${results.quote.price?.toFixed(2)}</span>
                       {results.quote.changesPercentage != null && (
                         <span className={`ml-2 ${results.quote.changesPercentage >= 0 ? 'text-fractal-green' : 'text-fractal-red'}`}>
                           {results.quote.changesPercentage >= 0 ? '+' : ''}{results.quote.changesPercentage?.toFixed(2)}%
@@ -160,15 +191,27 @@ export default function App() {
         </div>
       </header>
 
-      {/* Search */}
-      <section className="py-8 no-print">
-        <div className="max-w-6xl mx-auto px-4">
-          <SearchBar onAnalyze={handleAnalyze} loading={loading} />
+      {/* Guide page */}
+      {showGuide && <Guide onBack={() => setShowGuide(false)} />}
+
+      {/* Search — always visible (tabs needed for screener) */}
+      {!showGuide && (
+        <section className="py-8 no-print">
+          <div className="max-w-6xl mx-auto px-4">
+            <SearchBar onAnalyze={handleAnalyze} loading={loading} onTabChange={handleTabChange} />
+          </div>
+        </section>
+      )}
+
+      {/* Screener tab content */}
+      {!showGuide && isScreener && (
+        <div className="max-w-6xl mx-auto px-4 pb-16">
+          <ScreenerTab onSelectSymbol={handleScreenerSelect} />
         </div>
-      </section>
+      )}
 
       {/* Error */}
-      {error && (
+      {!showGuide && !isScreener && error && (
         <div className="max-w-6xl mx-auto px-4 mb-6">
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-fractal-red text-sm">
             {error}
@@ -177,7 +220,7 @@ export default function App() {
       )}
 
       {/* Loading state */}
-      {loading && !results && (
+      {!showGuide && !isScreener && loading && !results && (
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center py-20">
             <div className="inline-flex items-center gap-3 text-fractal-cyan">
@@ -187,13 +230,13 @@ export default function App() {
               </svg>
               <span className="text-lg font-mono">Computing fractal signature...</span>
             </div>
-            <p className="text-gray-500 text-sm mt-2">Running Hurst, Box-Counting, and Lacunarity across timeframes</p>
+            <p className="text-[#667085] text-sm mt-2">Running Hurst, Box-Counting, and Lacunarity across timeframes</p>
           </div>
         </div>
       )}
 
       {/* Results */}
-      {results && (
+      {!showGuide && !isScreener && results && (
         <div className="max-w-6xl mx-auto px-4 pb-16 space-y-6">
           {/* Directional Outlook — plain-English summary for novice investors */}
           <DirectionalOutlook horizons={results.horizonResults} symbol={symbol} />
@@ -227,23 +270,60 @@ export default function App() {
             progress={backtestProgress}
           />
 
-          {/* Footer disclaimer */}
-          <div className="text-center text-xs text-gray-600 pt-4 border-t border-chaos-700">
-            Chaos Report uses fractal geometry for educational analysis only. Not financial advice. Past fractal patterns do not guarantee future results.
+          {/* Inline disclaimer */}
+          <div className="text-center text-xs text-[#98a2b3] pt-4 border-t border-chaos-700">
+            Chaos Report uses fractal geometry for educational and informational purposes only. Not financial advice.
           </div>
         </div>
       )}
 
       {/* Empty state */}
-      {!loading && !results && !error && (
+      {!showGuide && !isScreener && !loading && !results && !error && (
         <div className="max-w-6xl mx-auto px-4 text-center py-20">
-          <div className="text-6xl mb-4 opacity-20">◇</div>
-          <h2 className="text-xl text-gray-400 font-mono">Enter a ticker to begin fractal analysis</h2>
-          <p className="text-sm text-gray-600 mt-2 max-w-md mx-auto">
+          <div className="text-6xl mb-4 opacity-10 text-[#667085]">◇</div>
+          <h2 className="text-xl text-[#667085] font-mono">Enter a ticker to begin fractal analysis</h2>
+          <p className="text-sm text-[#98a2b3] mt-2 max-w-md mx-auto">
             Chaos Report computes Hurst exponents, box-counting dimensions, and lacunarity
             across daily, hourly, and 5-minute timeframes to decode market psychology.
           </p>
         </div>
+      )}
+
+      {/* Site-wide legal disclaimer footer */}
+      {!showGuide && (
+        <footer className="max-w-6xl mx-auto px-4 py-8 mt-8 border-t border-chaos-800 no-print">
+          <div className="text-xs text-[#98a2b3] space-y-3 leading-relaxed">
+            <p className="font-semibold text-[#667085]">Disclaimer</p>
+            <p>
+              Chaos Report is provided by Transworld Management, Inc. for educational and informational
+              purposes only. Nothing contained herein constitutes investment advice, a recommendation,
+              a solicitation, or an offer to buy or sell any securities or financial instruments.
+            </p>
+            <p>
+              All analysis, scores, predictions, and signals generated by Chaos Report are derived from
+              mathematical models based on fractal geometry and historical price data. Past performance,
+              patterns, and fractal signatures do not guarantee future results. Markets are inherently
+              unpredictable and involve substantial risk of loss.
+            </p>
+            <p>
+              Transworld Management, Inc., its officers, directors, employees, affiliates, and agents
+              (collectively, "Transworld") make no representations or warranties, express or implied,
+              regarding the accuracy, completeness, reliability, or suitability of any information
+              provided. Transworld shall not be liable for any losses, damages, or claims arising from
+              the use of or reliance on this tool or its outputs, including but not limited to direct,
+              indirect, incidental, consequential, or punitive damages.
+            </p>
+            <p>
+              You should consult with a qualified financial advisor before making any investment decisions.
+              By using Chaos Report, you acknowledge that you are solely responsible for your own
+              investment decisions and that Transworld bears no responsibility for any outcomes resulting
+              from your use of this tool.
+            </p>
+            <p className="text-[#98a2b3]">
+              &copy; {new Date().getFullYear()} Transworld Management, Inc. All rights reserved.
+            </p>
+          </div>
+        </footer>
       )}
     </div>
   );

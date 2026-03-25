@@ -1,9 +1,9 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const METRIC_COLORS = {
-  hurst: '#06b6d4',
-  boxDim: '#a855f7',
-  lacunarity: '#f59e0b',
+  hurst: '#114f78',
+  boxDim: '#7c3aed',
+  lacunarity: '#b45309',
 };
 
 export default function TimeframeChart({ fractalResults }) {
@@ -29,8 +29,8 @@ export default function TimeframeChart({ fractalResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Multi-Timeframe Fractal Comparison</h2>
-      <p className="text-xs text-gray-500 mb-4">
+      <h2 className="text-lg font-semibold text-[#1a1a1a] mb-1 font-mono">Multi-Timeframe Fractal Comparison</h2>
+      <p className="text-xs text-[#667085] mb-4">
         This compares the fractal metrics across different time scales (daily, hourly, 5-minute). When all timeframes show similar values, it means the pattern is consistent at every zoom level — a strong signal. When they disagree, the market behaves differently at different scales.
       </p>
 
@@ -41,7 +41,7 @@ export default function TimeframeChart({ fractalResults }) {
       </div>
 
       {/* Legend */}
-      <div className="flex justify-center gap-6 mt-4 text-xs text-gray-500">
+      <div className="flex justify-center gap-6 mt-4 text-xs text-[#667085]">
         <span>Dashed line = neutral reference</span>
       </div>
     </div>
@@ -51,31 +51,31 @@ export default function TimeframeChart({ fractalResults }) {
 function MetricBar({ data, label, color, domain, refLine }) {
   return (
     <div>
-      <div className="text-sm font-semibold text-gray-300 mb-2 text-center" style={{ color }}>
+      <div className="text-sm font-semibold text-[#344054] mb-2 text-center" style={{ color }}>
         {label}
       </div>
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
           <XAxis
             dataKey="name"
-            tick={{ fill: '#9ca3af', fontSize: 11 }}
-            axisLine={{ stroke: '#334155' }}
+            tick={{ fill: '#667085', fontSize: 11 }}
+            axisLine={{ stroke: '#d0d5dd' }}
             tickLine={false}
           />
           <YAxis
             domain={domain}
-            tick={{ fill: '#6b7280', fontSize: 10 }}
+            tick={{ fill: '#667085', fontSize: 10 }}
             axisLine={false}
             tickLine={false}
             width={35}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
+              backgroundColor: '#ffffff',
+              border: '1px solid #d0d5dd',
               borderRadius: '8px',
               fontSize: '12px',
-              color: '#e5e7eb',
+              color: '#1a1a1a',
             }}
             formatter={(value) => [value.toFixed(3), label]}
           />

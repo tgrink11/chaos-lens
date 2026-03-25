@@ -7,13 +7,13 @@ export default function AnalysisNarrative({ analysis }) {
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-200 font-mono">AI Fractal Analysis</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <h2 className="text-lg font-semibold text-[#1a1a1a] font-mono">AI Fractal Analysis</h2>
+          <p className="text-xs text-[#667085] mt-1">
             An AI reads all the fractal data, behavioral signals, and historical analogs above, then writes a plain-English interpretation of what it all means together.
           </p>
         </div>
         {model && (
-          <span className="text-xs text-gray-500 font-mono bg-chaos-700 px-2 py-1 rounded">
+          <span className="text-xs text-[#667085] font-mono bg-[#f0f2f5] px-2 py-1 rounded">
             {model}
           </span>
         )}
@@ -36,7 +36,7 @@ export default function AnalysisNarrative({ analysis }) {
       )}
 
       {text && !loading && (
-        <div className="prose prose-invert prose-sm max-w-none">
+        <div className="prose prose-sm max-w-none">
           {text.split('\n').map((para, i) => {
             if (!para.trim()) return null;
 
@@ -52,7 +52,7 @@ export default function AnalysisNarrative({ analysis }) {
             // Handle bullet points
             if (para.trim().startsWith('- ') || para.trim().startsWith('* ')) {
               return (
-                <div key={i} className="text-sm text-gray-300 flex items-start gap-2 ml-2">
+                <div key={i} className="text-sm text-[#344054] flex items-start gap-2 ml-2">
                   <span className="text-fractal-cyan mt-0.5">▸</span>
                   <span>{para.replace(/^[-*]\s*/, '')}</span>
                 </div>
@@ -62,13 +62,13 @@ export default function AnalysisNarrative({ analysis }) {
             // Bold text handling
             const formatted = para.replace(
               /\*\*(.*?)\*\*/g,
-              '<strong class="text-gray-100">$1</strong>'
+              '<strong class="text-[#1a1a1a]">$1</strong>'
             );
 
             return (
               <p
                 key={i}
-                className="text-sm text-gray-300 leading-relaxed mb-2"
+                className="text-sm text-[#344054] leading-relaxed mb-2"
                 dangerouslySetInnerHTML={{ __html: formatted }}
               />
             );

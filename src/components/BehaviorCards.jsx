@@ -30,13 +30,13 @@ function BehaviorCard({ type, data }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-lg">{config.icon}</span>
-          <h3 className="text-sm font-semibold text-gray-200">{config.title}</h3>
+          <h3 className="text-sm font-semibold text-[#1a1a1a]">{config.title}</h3>
         </div>
         <span className={`text-xl font-mono font-bold ${scoreColor}`}>
           {data.score}
         </span>
       </div>
-      <div className="text-xs font-medium text-gray-300 mb-2">{data.intensity}</div>
+      <div className="text-xs font-medium text-[#344054] mb-2">{data.intensity}</div>
 
       {/* Score bar */}
       <div className="h-1.5 bg-chaos-700 rounded-full overflow-hidden mb-3">
@@ -44,7 +44,7 @@ function BehaviorCard({ type, data }) {
           className="h-full rounded-full transition-all duration-700"
           style={{
             width: `${data.score}%`,
-            backgroundColor: data.score > 60 ? '#ef4444' : data.score > 30 ? '#f59e0b' : '#22c55e',
+            backgroundColor: data.score > 60 ? '#912323' : data.score > 30 ? '#b45309' : '#0a7a2e',
           }}
         />
       </div>
@@ -53,7 +53,7 @@ function BehaviorCard({ type, data }) {
       {data.signals?.length > 0 && (
         <ul className="space-y-1">
           {data.signals.map((s, i) => (
-            <li key={i} className="text-xs text-gray-400 pl-2 border-l border-chaos-600">
+            <li key={i} className="text-xs text-[#667085] pl-2 border-l border-chaos-600">
               {s}
             </li>
           ))}
@@ -68,9 +68,9 @@ export default function BehaviorCards({ behavioralResults }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600">
-      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">Behavioral Signals</h2>
-      <p className="text-xs text-gray-500 mb-4">
-        These detect what traders are actually doing. <strong className="text-gray-400">Greed</strong> shows when buyers are overreaching (long upper wicks on candles). <strong className="text-gray-400">Fear</strong> shows panic selling (volume spikes on down moves). <strong className="text-gray-400">Exhaustion</strong> shows when volatility is drying up, often right before a big move.
+      <h2 className="text-lg font-semibold text-[#1a1a1a] mb-1 font-mono">Behavioral Signals</h2>
+      <p className="text-xs text-[#667085] mb-4">
+        These detect what traders are actually doing. <strong className="text-[#667085]">Greed</strong> shows when buyers are overreaching (long upper wicks on candles). <strong className="text-[#667085]">Fear</strong> shows panic selling (volume spikes on down moves). <strong className="text-[#667085]">Exhaustion</strong> shows when volatility is drying up, often right before a big move.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <BehaviorCard type="greed" data={behavioralResults.greed} />
@@ -81,10 +81,10 @@ export default function BehaviorCards({ behavioralResults }) {
       {/* Bond signals */}
       {behavioralResults.bond?.signals?.length > 0 && (
         <div className="mt-4 pt-4 border-t border-chaos-600">
-          <h3 className="text-sm font-semibold text-gray-300 mb-2">Bond Signals</h3>
+          <h3 className="text-sm font-semibold text-[#344054] mb-2">Bond Signals</h3>
           <ul className="space-y-1">
             {behavioralResults.bond.signals.map((s, i) => (
-              <li key={i} className="text-xs text-gray-400 flex items-start gap-2">
+              <li key={i} className="text-xs text-[#667085] flex items-start gap-2">
                 <span className="text-fractal-cyan mt-0.5">●</span> {s}
               </li>
             ))}
@@ -95,10 +95,10 @@ export default function BehaviorCards({ behavioralResults }) {
       {/* Commodity signals */}
       {behavioralResults.commodity?.signals?.length > 0 && (
         <div className="mt-4 pt-4 border-t border-chaos-600">
-          <h3 className="text-sm font-semibold text-gray-300 mb-2">Commodity Signals</h3>
+          <h3 className="text-sm font-semibold text-[#344054] mb-2">Commodity Signals</h3>
           <ul className="space-y-1">
             {behavioralResults.commodity.signals.map((s, i) => (
-              <li key={i} className="text-xs text-gray-400 flex items-start gap-2">
+              <li key={i} className="text-xs text-[#667085] flex items-start gap-2">
                 <span className="text-fractal-purple mt-0.5">●</span> {s}
               </li>
             ))}

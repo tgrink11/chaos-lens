@@ -36,7 +36,7 @@ function OutlookCard({ horizon }) {
 
         <div className="flex-1 min-w-0">
           {/* Horizon label */}
-          <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1">
+          <div className="text-xs text-[#667085] uppercase tracking-wider font-semibold mb-1">
             {horizon.days}-Day Outlook
           </div>
 
@@ -45,26 +45,26 @@ function OutlookCard({ horizon }) {
             <span className={`text-xl font-bold font-mono ${config.textClass}`}>
               {config.label}
             </span>
-            <span className="text-sm text-gray-400 font-mono">
+            <span className="text-sm text-[#667085] font-mono">
               {horizon.confidence}% confidence
             </span>
           </div>
 
           {/* Plain-English summary */}
-          <p className="text-sm text-gray-300 mt-1.5 leading-relaxed">
+          <p className="text-sm text-[#344054] mt-1.5 leading-relaxed">
             {horizon.summary}
           </p>
         </div>
       </div>
 
       {/* Confidence bar */}
-      <div className="h-1.5 bg-chaos-700 rounded-full overflow-hidden mt-3">
+      <div className="h-1.5 bg-[#e8eaed] rounded-full overflow-hidden mt-3">
         <div
           className="h-full rounded-full transition-all duration-1000"
           style={{
             width: `${horizon.confidence}%`,
-            backgroundColor: config.textClass.includes('green') ? '#22c55e'
-              : config.textClass.includes('red') ? '#ef4444' : '#f59e0b',
+            backgroundColor: config.textClass.includes('green') ? '#0a7a2e'
+              : config.textClass.includes('red') ? '#912323' : '#b45309',
           }}
         />
       </div>
@@ -77,10 +77,10 @@ export default function DirectionalOutlook({ horizons, symbol }) {
 
   return (
     <div className="bg-chaos-800 rounded-xl p-6 border border-chaos-600 print-break">
-      <h2 className="text-lg font-semibold text-gray-200 mb-1 font-mono">
+      <h2 className="text-lg font-semibold text-[#1a1a1a] mb-1 font-mono">
         Where is {symbol} headed?
       </h2>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-xs text-[#667085] mb-4">
         Directional outlook based on fractal pattern analysis across multiple timeframes
       </p>
 
@@ -89,7 +89,7 @@ export default function DirectionalOutlook({ horizons, symbol }) {
         <OutlookCard horizon={horizons.mediumTerm} />
       </div>
 
-      <p className="text-xs text-gray-600 mt-4 text-center">
+      <p className="text-xs text-[#98a2b3] mt-4 text-center">
         Based on fractal geometry analysis of price behavior. This is not financial advice.
       </p>
     </div>

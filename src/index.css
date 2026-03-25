@@ -3,17 +3,17 @@
 @tailwind utilities;
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 /* Fractal pulse animation */
 @keyframes fractal-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
 }
 
 .animate-fractal-pulse {
@@ -36,7 +36,7 @@ body {
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.06) 50%, transparent 75%);
+  background: linear-gradient(90deg, transparent 25%, rgba(0,0,0,0.04) 50%, transparent 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -58,28 +58,10 @@ body {
     break-inside: avoid;
   }
 
-  /* Make cards readable on paper */
-  .bg-chaos-800, .bg-chaos-900 {
-    background: white !important;
-    border-color: #d1d5db !important;
-  }
-
-  .text-gray-100, .text-gray-200, .text-gray-300 {
-    color: #1a1a1a !important;
-  }
-
-  .text-gray-400, .text-gray-500 {
-    color: #4b5563 !important;
-  }
-
-  .border-chaos-600, .border-chaos-700 {
-    border-color: #d1d5db !important;
-  }
-
   /* Keep colored indicators visible */
-  .text-fractal-green { color: #16a34a !important; }
-  .text-fractal-red { color: #dc2626 !important; }
-  .text-fractal-amber { color: #d97706 !important; }
-  .text-fractal-cyan { color: #0891b2 !important; }
-  .text-fractal-purple { color: #9333ea !important; }
+  .text-fractal-green { color: #0a7a2e !important; }
+  .text-fractal-red { color: #912323 !important; }
+  .text-fractal-amber { color: #b45309 !important; }
+  .text-fractal-cyan { color: #114f78 !important; }
+  .text-fractal-purple { color: #7c3aed !important; }
 }
