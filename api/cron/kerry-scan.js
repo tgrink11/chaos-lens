@@ -65,21 +65,52 @@ async function loadSymbols() {
 }
 
 /**
- * Fetch daily OHLCV from FMP (mirrors fetchDailyOnly in src/api/fetcher.js
- * but server-side, so it talks to FMP directly with the API key).
+ * Throttled quote fetcher. FMP rate-limits the /quote endpoint more
+ * aggressively than /historical-price-full, so when we fire 132 quotes in
+ * parallel they all come back empty. This serializes them: one quote call
+ * every QUOTE_GAP_MS, regardless of how many score workers are running.
+ *
+ * Historical-price-full calls stay parallel (BATCH_SIZE = 10) — only the
+ * quote calls go through this queue.
+ */
+const QUOTE_GAP_MS = 110;
+let quoteQueueTail = Promise.resolve();
+let lastQuoteAt = 0;
+
+function throttledQuote(symbol) {
+  const next = quoteQueueTail.then(async () => {
+    const wait = Math.max(0, lastQuoteAt + QUOTE_GAP_MS - Date.now());
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastQuoteAt = Date.now();
+    try {
+      const resp = await fetch(
+        `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${FMP_KEY}`
+      );
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return Array.isArray(data) ? data[0] : data;
+    } catch {
+      return null;
+    }
+  });
+  // Swallow rejections so one bad call doesn't break the chain
+  quoteQueueTail = next.catch(() => null);
+  return next;
+}
+
+/**
+ * Fetch daily OHLCV from FMP. Historical-price-full goes in parallel; the
+ * quote call goes through the throttled queue so we don't burn through
+ * FMP's per-second budget.
  */
 async function fetchDailyOHLCV(symbol) {
   const from = isoDateOffset(-730);
   const to = isoDateOffset(0);
   const histUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}?from=${from}&to=${to}&apikey=${FMP_KEY}`;
-  const quoteUrl = `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${FMP_KEY}`;
 
-  const [histRes, quoteRes] = await Promise.allSettled([
-    fetch(histUrl).then(r => (r.ok ? r.json() : null)),
-    fetch(quoteUrl).then(r => (r.ok ? r.json() : null)),
-  ]);
-
-  const histData = histRes.status === 'fulfilled' ? histRes.value : null;
+  const histResp = await fetch(histUrl).catch(() => null);
+  if (!histResp?.ok) return null;
+  const histData = await histResp.json().catch(() => null);
   const historical = histData?.historical || histData;
   if (!Array.isArray(historical) || historical.length === 0) return null;
 
@@ -93,10 +124,7 @@ async function fetchDailyOHLCV(symbol) {
     volume: sorted.map(d => parseFloat(d.volume) || 0),
   };
 
-  const quote = quoteRes.status === 'fulfilled'
-    ? (Array.isArray(quoteRes.value) ? quoteRes.value[0] : quoteRes.value)
-    : null;
-
+  const quote = await throttledQuote(symbol);
   return { daily, quote };
 }
 
