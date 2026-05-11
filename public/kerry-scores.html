@@ -28,9 +28,109 @@
             </p>
           </div>
         </div>
-        <div class="text-xs text-slate-500 mono text-right">
-          <div>Last scanned: <span id="last-scanned" class="text-slate-700">—</span></div>
-          <div>Total symbols: <span id="row-count" class="text-slate-700">—</span></div>
+        <div class="flex items-start gap-4">
+          <button
+            id="explain-toggle"
+            class="text-sm font-medium text-blue-700 hover:text-blue-800 border border-blue-200 hover:border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-md px-3 py-1.5 transition-colors"
+            aria-expanded="false"
+            aria-controls="explain-panel"
+          >
+            <span id="explain-toggle-label">How this works</span>
+            <span id="explain-toggle-arrow" class="inline-block ml-1">▾</span>
+          </button>
+          <div class="text-xs text-slate-500 mono text-right">
+            <div>Last scanned: <span id="last-scanned" class="text-slate-700">—</span></div>
+            <div>Total symbols: <span id="row-count" class="text-slate-700">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsible explanation panel -->
+      <div id="explain-panel" class="hidden border-t border-slate-200 bg-slate-50">
+        <div class="px-6 py-6 max-w-5xl mx-auto text-sm text-slate-700 space-y-6 leading-relaxed">
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Where the data comes from</h2>
+            <p>
+              Every weekday at 6:00 pm ET — about two hours after the US market close — a scheduled job pulls
+              the latest ticker lists from Kerry's Google Sheet (Tell Sheet and Watchlist) and fetches two years
+              of daily OHLCV data for each symbol. That price history is then run through the
+              <em>chaos-lens</em> fractal engine, and the results land in the table below. No human intervention
+              is required; the page you're looking at is the unedited model output.
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">What the engine measures</h2>
+            <p class="mb-3">
+              Three fractal metrics describe the <em>shape</em> of recent price action — not the direction, just
+              how the chart looks geometrically. The engine pairs them with a momentum/behavioral layer (recent
+              return, candle wicks, volume spikes) to translate shape into a directional read.
+            </p>
+            <ul class="space-y-2 ml-1">
+              <li><span class="mono font-semibold text-slate-900">Hurst (H)</span> — persistence.
+                H&nbsp;>&nbsp;0.55 means the price is trending (moves in the same direction longer than chance).
+                H&nbsp;≈&nbsp;0.5 is a random walk (no edge). H&nbsp;<&nbsp;0.45 is mean-reverting (every move
+                tends to reverse). Note: H measures persistence, <em>not</em> bullish/bearish — a strong downtrend
+                has high H too.</li>
+              <li><span class="mono font-semibold text-slate-900">Box dimension (D)</span> — smoothness.
+                D&nbsp;close to 1 is a clean line (steady trend). D&nbsp;near 1.5 is typical market chop.
+                D&nbsp;near 2 is space-filling chaos (frantic noise). Low D plus a recent up-move suggests a
+                breakout is building; high D suggests the structure is breaking down.</li>
+              <li><span class="mono font-semibold text-slate-900">Lacunarity (Λ)</span> — gap distribution.
+                Λ&nbsp;>&nbsp;1.4 means buying or selling is clustered into pockets (accumulation/distribution).
+                Λ&nbsp;close to 1 means uniform grinding with no concentration. High Λ often precedes
+                directional moves once the clusters resolve.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">How to read each column</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+              <div><span class="mono font-semibold text-slate-900">Symbol / List</span> — Ticker and which list it
+                came from (Tell Sheet or Watchlist). HUT and MRVL appear on both lists; only one row is stored,
+                tagged with whichever list was scored last.</div>
+              <div><span class="mono font-semibold text-slate-900">Price</span> — Most recent daily close from the
+                two-year history pulled at scan time. Not a real-time quote.</div>
+              <div><span class="mono font-semibold text-slate-900">15-Day / 62-Day</span> — Directional outlook for
+                the next ~3 and ~13 trading weeks, derived from horizon-matched analog windows (the engine searches
+                historical periods with similar fractal signatures and looks at what happened 15 or 62 bars later).
+                <em>Bullish</em> / <em>bearish</em> / <em>neutral</em>.</div>
+              <div><span class="mono font-semibold text-slate-900">15d / 62d Conf</span> — How concentrated the
+                bullish/bearish vote is. 90% is the cap; anything &gt;70% means most signals agree. &lt;50% means
+                the model is uncertain.</div>
+              <div><span class="mono font-semibold text-slate-900">Prediction</span> — The engine's single
+                "next-break" call. <em>Thrust Up</em> expects a breakout higher; <em>Cascade Down</em> expects a
+                sharp decline; <em>Consolidation</em> means no clear direction — likely chop.</div>
+              <div><span class="mono font-semibold text-slate-900">Pred Conf</span> — How dominant the winning
+                call was vs. the runners-up. &gt;60% is a high-conviction signal; &lt;40% means competing
+                interpretations.</div>
+              <div><span class="mono font-semibold text-slate-900">Top Reason</span> — The highest-weighted signal
+                that drove the prediction. Hover for the full text. Examples: "Hurst 0.66 persistent + uptrend",
+                "Box dimension 1.12 — smooth decline", "Volume spike on decline — capitulation risk".</div>
+              <div><span class="mono font-semibold text-slate-900">Mood</span> — Market psychology label.
+                <em>Euphoria</em> = trending up with healthy structure;
+                <em>Panic</em> = breakdown plus high fear;
+                <em>Stealth Build</em> = quiet accumulation pattern, often precedes a move up;
+                <em>Grind</em> = directionless chop.</div>
+              <div><span class="mono font-semibold text-slate-900">H / D / Λ</span> — Raw fractal values explained
+                above. Useful for spotting your own setups (e.g. sort by H descending to find the strongest
+                persistence; sort by D ascending to find the smoothest paths).</div>
+              <div><span class="mono font-semibold text-slate-900">Report</span> — Opens the full chaos-lens
+                analysis for that ticker in a new tab: multi-timeframe fractals, behavioral signals, historical
+                analogs, an AI narrative, and a walk-forward backtest.</div>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">How to use the table</h2>
+            <ul class="list-disc ml-5 space-y-1.5">
+              <li>Click any column header to sort. Numeric columns sort descending by default; click again to flip.</li>
+              <li>Use the <strong>Tell Sheet</strong> / <strong>Watchlist</strong> pills to filter to one list, or type a symbol in the search box.</li>
+              <li>Look for <em>agreement</em> across columns: a stock with bullish 15-day + bullish 62-day + Thrust Up + Euphoria + low D is a much higher-conviction setup than one where the signals disagree.</li>
+              <li>Be cautious of <em>divergences</em>: bullish horizons with a Cascade Down prediction (or vice-versa) means the longer trend and the near-term micro-structure are pulling in opposite directions — the prediction tends to lead in the short term.</li>
+              <li>This is one model's read on a snapshot of price data. It is not investment advice. Use it as a screening layer, not a decision rule.</li>
+            </ul>
+          </section>
         </div>
       </div>
     </header>
@@ -253,6 +353,18 @@
       els.search.addEventListener('input', (e) => {
         search = e.target.value;
         render();
+      });
+
+      // ---------- Explain panel toggle ----------
+      const explainBtn = document.getElementById('explain-toggle');
+      const explainPanel = document.getElementById('explain-panel');
+      const explainLabel = document.getElementById('explain-toggle-label');
+      const explainArrow = document.getElementById('explain-toggle-arrow');
+      explainBtn.addEventListener('click', () => {
+        const open = explainPanel.classList.toggle('hidden') === false;
+        explainBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        explainLabel.textContent = open ? 'Hide explanation' : 'How this works';
+        explainArrow.textContent = open ? '▴' : '▾';
       });
 
       // ---------- Fetch + boot ----------
