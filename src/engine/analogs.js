@@ -17,9 +17,12 @@ import { computeLacunarity } from './lacunarity.js';
  * @param {number} maxAnalogs - Max analogs to return (default 5)
  * @returns {Array} matching historical periods
  */
-export function findAnalogs(allPrices, currentSignature, windowSize = 60, maxAnalogs = 5) {
+export function findAnalogs(allPrices, currentSignature, windowSize = 60, maxAnalogs = 5, forwardBars = 20) {
+  // Always return the same shape so callers can do
+  // `analogResults?.analogs` / `analogResults?.consensus` without surprises.
+  const emptyResult = { analogs: [], consensus: null };
   if (!allPrices || allPrices.length < windowSize * 3) {
-    return [];
+    return emptyResult;
   }
 
   const { H: curH, D: curD, lambda: curL } = currentSignature;
@@ -44,12 +47,16 @@ export function findAnalogs(allPrices, currentSignature, windowSize = 60, maxAna
     const dL = (l.lambda - curL);
     const distance = Math.sqrt(dH * dH + dD * dD + dL * dL);
 
-    // What happened AFTER this window?
+    // What happened AFTER this window? Forward window is caller-controlled
+    // so the same analog routine can answer both "what happens in 15 days?"
+    // and "what happens in 62 days?" without conflating the two.
     const afterStart = i + windowSize;
-    const afterEnd = Math.min(allPrices.length, afterStart + 20);
+    const afterEnd = Math.min(allPrices.length, afterStart + forwardBars);
     const afterPrices = allPrices.slice(afterStart, afterEnd);
 
-    if (afterPrices.length < 5) continue;
+    // Require at least ~25% of the requested forward window
+    const minForwardSample = Math.max(5, Math.floor(forwardBars / 4));
+    if (afterPrices.length < minForwardSample) continue;
 
     const startPrice = window[window.length - 1];
     const endPrice = afterPrices[afterPrices.length - 1];
@@ -88,22 +95,19 @@ export function findAnalogs(allPrices, currentSignature, windowSize = 60, maxAna
     .filter(c => c.distance < maxDist)
     .slice(0, maxAnalogs);
 
-  // Compute consensus
+  // Compute consensus (only when we have ≥2 analogs to vote)
+  let consensus = null;
   if (analogs.length >= 2) {
     const upCount = analogs.filter(a => a.outcome.direction === 'UP').length;
     const downCount = analogs.filter(a => a.outcome.direction === 'DOWN').length;
     const avgReturn = analogs.reduce((s, a) => s + a.outcome.returnPct, 0) / analogs.length;
-
-    return {
-      analogs,
-      consensus: {
-        direction: upCount > downCount ? 'UP' : downCount > upCount ? 'DOWN' : 'MIXED',
-        avgReturn: Math.round(avgReturn * 100) / 100,
-        upPct: Math.round((upCount / analogs.length) * 100),
-        confidence: Math.round((Math.abs(upCount - downCount) / analogs.length) * 100),
-      },
+    consensus = {
+      direction: upCount > downCount ? 'UP' : downCount > upCount ? 'DOWN' : 'MIXED',
+      avgReturn: Math.round(avgReturn * 100) / 100,
+      upPct: Math.round((upCount / analogs.length) * 100),
+      confidence: Math.round((Math.abs(upCount - downCount) / analogs.length) * 100),
     };
   }
 
-  return { analogs, consensus: null };
+  return { analogs, consensus };
 }

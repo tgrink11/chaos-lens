@@ -5,6 +5,11 @@
  * Based on fractal dynamics + behavioral momentum
  */
 
+import { computeHurst } from './hurst.js';
+import { computeBoxDimension } from './boxcounting.js';
+import { computeLacunarity } from './lacunarity.js';
+import { findAnalogs } from './analogs.js';
+
 const PREDICTIONS = {
   THRUST_UP: {
     key: 'THRUST_UP',
@@ -268,10 +273,6 @@ function pickSummary(direction, horizon) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-import { computeHurst } from './hurst.js';
-import { computeBoxDimension } from './boxcounting.js';
-import { computeLacunarity } from './lacunarity.js';
-
 /**
  * Compute fractal metrics on a specific slice of price data
  */
@@ -329,6 +330,26 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
   const fear = behavioralResults?.fear?.score ?? 0;
   const exhaustion = behavioralResults?.exhaustion?.score ?? 0;
   const moodKey = moodResult?.mood?.key ?? 'GRIND';
+
+  // Compute fresh analog sets matched to each horizon's forward window.
+  // The passed-in `analogResults` is the 20-day-forward set used by the UI;
+  // we deliberately do NOT reuse it for prediction because a 20-day outcome
+  // is a poor proxy for either a 15-day or 62-day forecast. If the caller
+  // (e.g. light-weight screener) skipped analogs entirely, fall back to the
+  // generic set so behavior degrades gracefully.
+  const currentSignature = {
+    H: fractalResults?.primary?.hurst?.H ?? 0.5,
+    D: fractalResults?.primary?.boxDim?.D ?? 1.5,
+    lambda: fractalResults?.primary?.lacunarity?.lambda ?? 1,
+  };
+  const shortAnalogResults =
+    dailyCloses && dailyCloses.length > 0
+      ? findAnalogs(dailyCloses, currentSignature, 30, 5, 15)
+      : { analogs: [], consensus: null };
+  const mediumAnalogResults =
+    dailyCloses && dailyCloses.length > 0
+      ? findAnalogs(dailyCloses, currentSignature, 60, 5, 62)
+      : analogResults ?? { analogs: [], consensus: null };
 
   // ============================================================
   // 15-DAY: Recent window fractals + behavioral momentum
@@ -406,6 +427,14 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
   // Regime change from mood classifier
   if (moodResult?.regimeChange?.direction === 'breaking_down') {
     shortBear += 12;
+  }
+
+  // Short-horizon analog consensus (15-day forward window)
+  if (shortAnalogResults?.consensus) {
+    const { direction, avgReturn, confidence: ac } = shortAnalogResults.consensus;
+    const analogWeight = Math.min(15, Math.round((ac || 0) * 0.15));
+    if (direction === 'UP' && avgReturn > 0) shortBull += analogWeight;
+    else if (direction === 'DOWN' && avgReturn < 0) shortBear += analogWeight;
   }
 
   const shortNet = shortBull - shortBear;
@@ -497,9 +526,10 @@ export function predictHorizons(fractalResults, behavioralResults, moodResult, a
     medBear += 10;
   }
 
-  // Historical analogs are the KEY differentiator for medium-term
-  if (analogResults?.consensus) {
-    const { direction, avgReturn, confidence: analogConf } = analogResults.consensus;
+  // Historical analogs are the KEY differentiator for medium-term —
+  // use the 62-day-forward set, NOT the 20-day-default set.
+  if (mediumAnalogResults?.consensus) {
+    const { direction, avgReturn, confidence: analogConf } = mediumAnalogResults.consensus;
     const analogWeight = Math.min(25, Math.round((analogConf || 0) * 0.25));
     if (direction === 'UP' && avgReturn > 0) medBull += analogWeight;
     else if (direction === 'DOWN' && avgReturn < 0) medBear += analogWeight;

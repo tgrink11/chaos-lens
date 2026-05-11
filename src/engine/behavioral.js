@@ -29,18 +29,27 @@ export function detectGreed(data, lookback = 50) {
     const progress = (i - (close.length - n)) / (n - 1 || 1);
     const weight = 1.0 + progress;
 
-    const wickRatio = upperWick / (body || 0.001);
     const wickPct = upperWick / totalRange;
 
-    // Long upper wicks signal greed — buyers reaching too high
-    if (wickRatio > 2.0) {
-      wickScore += 3 * weight;
-      signals.push(`Bar ${i}: upper wick ${wickRatio.toFixed(1)}x body — aggressive buying exhaustion`);
-    } else if (wickRatio > 1.2) {
-      wickScore += 1.5 * weight;
+    // Long upper wicks signal greed — buyers reaching too high.
+    // wickRatio (upperWick / body) is only meaningful when body has real
+    // size. For dojis (body ≈ 0) it explodes to thousands, which the old
+    // `body || 0.001` divisor leaked through as max-strength greed even
+    // though a doji is indecision, not greed. We require body to be at
+    // least 10% of the total range before using wickRatio at all; below
+    // that threshold we fall back to wickPct only.
+    const bodyIsMeaningful = body > 0.1 * totalRange;
+    if (bodyIsMeaningful) {
+      const wickRatio = upperWick / body;
+      if (wickRatio > 2.0) {
+        wickScore += 3 * weight;
+        signals.push(`Bar ${i}: upper wick ${wickRatio.toFixed(1)}x body — aggressive buying exhaustion`);
+      } else if (wickRatio > 1.2) {
+        wickScore += 1.5 * weight;
+      }
     }
 
-    // Wick dominates the range
+    // Wick dominates the range — works for both regular and doji bars
     if (wickPct > 0.6) {
       wickScore += 2 * weight;
     }

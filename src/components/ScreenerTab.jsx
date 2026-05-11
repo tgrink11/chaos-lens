@@ -163,7 +163,11 @@ export default function ScreenerTab({ onSelectSymbol }) {
     }
   }, []);
 
-  // On mount: check Supabase cache → localStorage fallback → auto-scan
+  // On mount: check Supabase cache → localStorage fallback. We deliberately
+  // do NOT auto-scan when no cache exists: a cold-start scan hits ~2,500 FMP
+  // endpoints and runs for 3-5 minutes, which is wasteful if the visitor
+  // didn't actually want a scan. Instead, fall back to the "Run Morning
+  // Scan" CTA so the user opts in explicitly.
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
@@ -184,16 +188,13 @@ export default function ScreenerTab({ onSelectSymbol }) {
           setLastScanned(new Date(scannedAt));
           // Also save to localStorage for instant access next time
           setCachedResults(serverResults);
-        } else {
-          // No cache anywhere — auto-execute scan
-          handleScan();
         }
+        // No cache → leave `results` null so the CTA renders.
       })
       .catch(() => {
-        // Supabase unavailable — auto-execute scan
-        handleScan();
+        // Supabase unavailable → leave `results` null so the CTA renders.
       });
-  }, [handleScan]);
+  }, []);
 
   const handleStop = useCallback(() => {
     abortRef.current = true;

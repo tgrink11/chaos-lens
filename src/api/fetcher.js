@@ -112,16 +112,25 @@ export async function fetchBondData() {
   for (const item of settled) {
     if (item.id === 'treasury_daily') {
       if (Array.isArray(item.data) && item.data.length > 0) {
-        // Use 10-year yield as the "price" for fractal analysis
-        const sorted = [...item.data].sort((a, b) => new Date(a.date) - new Date(b.date));
-        results.daily = {
-          date: sorted.map(d => d.date),
-          close: sorted.map(d => parseFloat(d.year10) || 0),
-          high: sorted.map(d => parseFloat(d.year10) || 0),
-          low: sorted.map(d => parseFloat(d.year10) || 0),
-          open: sorted.map(d => parseFloat(d.year10) || 0),
-          volume: sorted.map(() => 0),
-        };
+        // Use 10-year yield as the "price" for fractal analysis. Filter out
+        // entries where year10 is missing or non-numeric — the previous
+        // `|| 0` fallback injected sentinel zeros into the series and
+        // wrecked Hurst / box-dim / lacunarity downstream.
+        const sorted = [...item.data]
+          .map(d => ({ date: d.date, value: parseFloat(d.year10) }))
+          .filter(d => Number.isFinite(d.value) && d.value > 0)
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+        if (sorted.length > 0) {
+          const v = sorted.map(d => d.value);
+          results.daily = {
+            date: sorted.map(d => d.date),
+            close: v,
+            high: v,
+            low: v,
+            open: v,
+            volume: v.map(() => 0),
+          };
+        }
       }
       continue;
     }
@@ -131,17 +140,26 @@ export async function fetchBondData() {
       const latest = obs.find(o => o.value !== '.');
       results.yields[item.label] = latest ? parseFloat(latest.value) : null;
 
-      // Build time series for the 10Y for fractal analysis
+      // Build time series for the 10Y for fractal analysis. FRED uses '.'
+      // for missing — filter those, parseFloat the rest, and drop anything
+      // that isn't a finite positive yield.
       if (item.id === 'DGS10' && !results.daily) {
-        const valid = obs.filter(o => o.value !== '.').reverse();
-        results.daily = {
-          date: valid.map(o => o.date),
-          close: valid.map(o => parseFloat(o.value)),
-          high: valid.map(o => parseFloat(o.value)),
-          low: valid.map(o => parseFloat(o.value)),
-          open: valid.map(o => parseFloat(o.value)),
-          volume: valid.map(() => 0),
-        };
+        const valid = obs
+          .filter(o => o.value !== '.')
+          .map(o => ({ date: o.date, value: parseFloat(o.value) }))
+          .filter(o => Number.isFinite(o.value) && o.value > 0)
+          .reverse();
+        if (valid.length > 0) {
+          const v = valid.map(o => o.value);
+          results.daily = {
+            date: valid.map(o => o.date),
+            close: v,
+            high: v,
+            low: v,
+            open: v,
+            volume: v.map(() => 0),
+          };
+        }
       }
     }
   }
