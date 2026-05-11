@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import SearchBar from './components/SearchBar';
 import FractalMetrics from './components/FractalMetrics';
 import MoodIndicator from './components/MoodIndicator';
@@ -141,6 +141,27 @@ export default function App() {
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
   }, []);
+
+  // Deep-link support: if the URL has ?symbol=NVDA&type=stock (or no type;
+  // defaults to stock), auto-fire the analysis on mount. Used by the
+  // Kerry's scores table on behavioral-market-agent so each row can link
+  // straight to a pre-loaded full report.
+  //
+  // Runs once after email-gate unlock. Validates the symbol shape and type
+  // before firing so a malformed URL doesn't trigger junk fetches.
+  const deepLinkFired = useRef(false);
+  useEffect(() => {
+    if (!emailUnlocked || deepLinkFired.current) return;
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const sym = params.get('symbol');
+    const type = params.get('type') || 'stock';
+    if (!sym || !/^[A-Z]{1,5}$/.test(sym)) return;
+    if (!['stock', 'index', 'bond', 'commodity'].includes(type)) return;
+    deepLinkFired.current = true;
+    setActiveTab(type === 'commodity' ? 'commodity' : type === 'bond' ? 'bond' : type === 'index' ? 'index' : 'stock');
+    handleAnalyze(sym, type);
+  }, [emailUnlocked, handleAnalyze]);
 
   // Email gate — blocks entire app until email submitted
   if (!emailUnlocked) {

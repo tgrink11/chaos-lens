@@ -6,6 +6,14 @@
     "api/analyze.js": { "maxDuration": 60 },
     "api/fmp.js": { "maxDuration": 15 },
     "api/fred.js": { "maxDuration": 10 },
-    "api/twelvedata.js": { "maxDuration": 15 }
-  }
+    "api/twelvedata.js": { "maxDuration": 15 },
+    "api/cron/kerry-scan.js": { "maxDuration": 60 },
+    "api/kerry-scores.js": { "maxDuration": 10 }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/kerry-scan",
+      "schedule": "0 22 * * 1-5"
+    }
+  ]
 }
