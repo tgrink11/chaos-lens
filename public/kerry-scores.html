@@ -18,21 +18,24 @@
   </head>
   <body class="bg-slate-50 text-slate-900">
     <header class="border-b border-slate-200 bg-white">
-      <div class="max-w-7xl mx-auto px-4 py-5 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Kerry's Fractal Scores</h1>
-          <p class="text-sm text-slate-500 mt-0.5">
-            Daily chaos-lens analysis of the Tell Sheet + Watchlist · refreshed weekdays after market close
-          </p>
+      <div class="px-6 py-5 flex items-center justify-between flex-wrap gap-4">
+        <div class="flex items-center gap-4">
+          <img src="/logo.png" alt="Best of US Investors" class="h-14 w-auto" />
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">Kerry's Fractal Scores</h1>
+            <p class="text-sm text-slate-500 mt-0.5">
+              Daily chaos-lens analysis of the Tell Sheet + Watchlist · refreshed weekdays after market close
+            </p>
+          </div>
         </div>
-        <div class="text-xs text-slate-500 mono">
+        <div class="text-xs text-slate-500 mono text-right">
           <div>Last scanned: <span id="last-scanned" class="text-slate-700">—</span></div>
           <div>Total symbols: <span id="row-count" class="text-slate-700">—</span></div>
         </div>
       </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="px-6 py-6">
       <!-- Filter pills -->
       <div class="flex items-center gap-2 mb-4 flex-wrap">
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
@@ -50,21 +53,21 @@
         <table class="w-full text-sm">
           <thead class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-600">
             <tr>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="list_type">List<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="price">Price<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="short_term_direction">15-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="short_term_confidence">15d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="medium_term_direction">62-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
-              <th class="px-3 py-2.5 text-left">Top Reason</th>
-              <th class="sortable px-3 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="hurst">H<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="box_dim">D<span class="sort-arrow"></span></th>
-              <th class="sortable px-3 py-2.5 text-right" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
-              <th class="px-3 py-2.5 text-center">Report</th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="list_type">List<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="price">Price<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="short_term_direction">15-Day<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="short_term_confidence">15d Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="medium_term_direction">62-Day<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
+              <th class="px-2 py-2.5 text-left">Top Reason</th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="hurst">H<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="box_dim">D<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
+              <th class="px-2 py-2.5 text-center">Report</th>
             </tr>
           </thead>
           <tbody id="rows" class="divide-y divide-slate-100"></tbody>
@@ -161,21 +164,21 @@
 
         return `
           <tr>
-            <td class="px-3 py-2 mono font-semibold">${r.symbol}</td>
+            <td class="px-2 py-2 mono font-semibold">${r.symbol}</td>
             <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtPrice(r.price)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtPrice(r.price)}</td>
             <td class="px-3 py-2">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtConf(r.short_term_confidence)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtConf(r.short_term_confidence)}</td>
             <td class="px-3 py-2">${pill(dir62, DIRECTION_COLOR[dir62] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtConf(r.medium_term_confidence)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtConf(r.medium_term_confidence)}</td>
             <td class="px-3 py-2">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtConf(r.prediction_confidence)}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 max-w-xs truncate" title="${(r.prediction_reasoning || '').replace(/"/g, '&quot;')}">${r.prediction_reasoning || '—'}</td>
-            <td class="px-3 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtNum(r.box_dim)}</td>
-            <td class="px-3 py-2 text-right mono num">${fmtNum(r.lambda)}</td>
-            <td class="px-3 py-2 text-center text-xs">${fullReport}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtConf(r.prediction_confidence)}</td>
+            <td class="px-2 py-2 text-xs text-slate-600 max-w-[220px] truncate" title="${(r.prediction_reasoning || '').replace(/"/g, '&quot;')}">${r.prediction_reasoning || '—'}</td>
+            <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.lambda)}</td>
+            <td class="px-2 py-2 text-center text-xs">${fullReport}</td>
           </tr>
         `;
       }
