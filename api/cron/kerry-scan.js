@@ -65,43 +65,12 @@ async function loadSymbols() {
 }
 
 /**
- * Throttled quote fetcher. FMP rate-limits the /quote endpoint more
- * aggressively than /historical-price-full, so when we fire 132 quotes in
- * parallel they all come back empty. This serializes them: one quote call
- * every QUOTE_GAP_MS, regardless of how many score workers are running.
- *
- * Historical-price-full calls stay parallel (BATCH_SIZE = 10) — only the
- * quote calls go through this queue.
- */
-const QUOTE_GAP_MS = 110;
-let quoteQueueTail = Promise.resolve();
-let lastQuoteAt = 0;
-
-function throttledQuote(symbol) {
-  const next = quoteQueueTail.then(async () => {
-    const wait = Math.max(0, lastQuoteAt + QUOTE_GAP_MS - Date.now());
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    lastQuoteAt = Date.now();
-    try {
-      const resp = await fetch(
-        `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${FMP_KEY}`
-      );
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      return Array.isArray(data) ? data[0] : data;
-    } catch {
-      return null;
-    }
-  });
-  // Swallow rejections so one bad call doesn't break the chain
-  quoteQueueTail = next.catch(() => null);
-  return next;
-}
-
-/**
- * Fetch daily OHLCV from FMP. Historical-price-full goes in parallel; the
- * quote call goes through the throttled queue so we don't burn through
- * FMP's per-second budget.
+ * Fetch daily OHLCV from FMP. The most recent close serves as the price
+ * column — no separate /quote call is needed. The /quote endpoint is
+ * rate-limited more aggressively than /historical-price-full on FMP free
+ * tiers, and our throttled-queue workaround still returned null prices,
+ * so the simpler and more reliable path is to read the last historical
+ * close directly.
  */
 async function fetchDailyOHLCV(symbol) {
   const from = isoDateOffset(-730);
@@ -124,8 +93,13 @@ async function fetchDailyOHLCV(symbol) {
     volume: sorted.map(d => parseFloat(d.volume) || 0),
   };
 
-  const quote = await throttledQuote(symbol);
-  return { daily, quote };
+  // Most recent close serves as the displayed price.
+  const lastClose = daily.close[daily.close.length - 1];
+  const price = Number.isFinite(lastClose) && lastClose > 0
+    ? Math.round(lastClose * 100) / 100
+    : null;
+
+  return { daily, price };
 }
 
 function isoDateOffset(days) {
@@ -143,7 +117,7 @@ async function scoreSymbol(symbol, listType) {
   if (!fetched?.daily?.close?.length || fetched.daily.close.length < 60) {
     return null;
   }
-  const { daily, quote } = fetched;
+  const { daily, price } = fetched;
 
   const fractalResults = runFractalAnalysis({ daily, hourly: null, fiveMin: null });
   const primary = fractalResults?.primary;
@@ -175,8 +149,8 @@ async function scoreSymbol(symbol, listType) {
   return {
     symbol,
     list_type: listType,
-    name: quote?.name ?? null,
-    price: quote?.price ?? null,
+    name: null,
+    price,
     short_term_direction: horizonResults.shortTerm.direction,
     short_term_confidence: horizonResults.shortTerm.confidence,
     medium_term_direction: horizonResults.mediumTerm.direction,
