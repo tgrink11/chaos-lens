@@ -104,6 +104,13 @@
               <div><span class="mono font-semibold text-slate-900">Pred Conf</span> — How dominant the winning
                 call was vs. the runners-up. &gt;60% is a high-conviction signal; &lt;40% means competing
                 interpretations.</div>
+              <div><span class="mono font-semibold text-slate-900">Conviction</span> — Composite score (roughly
+                −5 to +5) that rewards alignment of the five signals: 15-day direction, 62-day direction,
+                prediction, mood, and a low-D (smooth path) bonus. Each direction signal is weighted by its
+                confidence. <strong>Positive</strong> = bullish setup; <strong>negative</strong> = bearish
+                setup; <strong>near zero</strong> = signals disagree. Click the
+                <span class="text-emerald-700">★ Highest Conviction</span> button to sort the table this way —
+                first click puts the most-bullish at the top, second click flips to most-bearish.</div>
               <div><span class="mono font-semibold text-slate-900">Top Reason</span> — The highest-weighted signal
                 that drove the prediction. Hover for the full text. Examples: "Hurst 0.66 persistent + uptrend",
                 "Box dimension 1.12 — smooth decline", "Volume spike on decline — capitulation risk".</div>
@@ -136,11 +143,15 @@
     </header>
 
     <main class="px-6 py-6">
-      <!-- Filter pills -->
+      <!-- Filter pills + sort actions -->
       <div class="flex items-center gap-2 mb-4 flex-wrap">
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="tellsheet">Tell Sheet</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="watchlist">Watchlist</button>
+        <div class="w-px h-6 bg-slate-300 mx-1"></div>
+        <button id="sort-conviction" class="px-3 py-1.5 text-sm rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors" title="Sort by composite conviction score: most-bullish at top, most-bearish at bottom">
+          ★ Highest Conviction
+        </button>
         <div class="grow"></div>
         <input id="search" type="search" placeholder="Filter by symbol…" class="text-sm border border-slate-300 rounded-md px-3 py-1.5 w-56" />
       </div>
@@ -162,6 +173,7 @@
               <th class="sortable px-2 py-2.5 text-right" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
               <th class="px-2 py-2.5 text-left">Top Reason</th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="hurst">H<span class="sort-arrow"></span></th>
@@ -251,6 +263,49 @@
         return v.toFixed(decimals);
       }
 
+      /**
+       * Composite conviction score (-5.4 … +5.4 in practice).
+       *
+       * Rewards alignment across the five signals called out in the
+       * explanation panel: 15-day direction, 62-day direction, the
+       * next-break prediction, the mood label, and the smoothness of
+       * the price path (low box dimension D).
+       *
+       * Direction signals are weighted by their own confidence so a
+       * 90%-confident bullish signal counts more than a 55%-confident
+       * one. Mood adds a flat boost in its native direction. Low D
+       * amplifies whichever direction the rest of the signals point —
+       * a smooth path makes a strong setup stronger and a chaotic
+       * path muddies an already-mixed picture.
+       */
+      function convictionScore(r) {
+        let s = 0;
+        const c15 = (r.short_term_confidence || 0) / 100;
+        if (r.short_term_direction === 'bullish') s += c15;
+        else if (r.short_term_direction === 'bearish') s -= c15;
+        const c62 = (r.medium_term_confidence || 0) / 100;
+        if (r.medium_term_direction === 'bullish') s += c62;
+        else if (r.medium_term_direction === 'bearish') s -= c62;
+        const cP = (r.prediction_confidence || 0) / 100;
+        if (r.prediction === 'THRUST_UP') s += cP;
+        else if (r.prediction === 'CASCADE_DOWN') s -= cP;
+        if (r.mood === 'EUPHORIA') s += 0.7;
+        else if (r.mood === 'STEALTH_BUILD') s += 0.5;
+        else if (r.mood === 'PANIC') s -= 0.7;
+        // Box dimension amplifies direction. D close to 1 = clean line.
+        if (Number.isFinite(r.box_dim)) {
+          const smoothness = Math.max(0, 1.5 - r.box_dim); // 0 (chop) → 0.5 (clean)
+          const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
+          s += smoothness * sign * 2; // up to ±1.0
+        }
+        return Math.round(s * 100) / 100;
+      }
+
+      function fmtConviction(v) {
+        if (v == null || !Number.isFinite(v)) return '—';
+        return (v >= 0 ? '+' : '') + v.toFixed(2);
+      }
+
       function rowHtml(r) {
         const dir15 = (r.short_term_direction || 'neutral').toLowerCase();
         const dir62 = (r.medium_term_direction || 'neutral').toLowerCase();
@@ -261,6 +316,17 @@
         const fullReport = r.chaos_lens_url
           ? `<a href="${r.chaos_lens_url}" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open ↗</a>`
           : '—';
+
+        // Conviction score is computed on the fly so we never have to migrate
+        // schemas when the scoring rubric changes.
+        const conv = r._conviction;
+        const convClass = conv == null || !Number.isFinite(conv)
+          ? 'text-slate-400'
+          : conv >= 2.5 ? 'text-emerald-700 font-semibold'
+          : conv >= 1.0 ? 'text-emerald-600'
+          : conv <= -2.5 ? 'text-red-700 font-semibold'
+          : conv <= -1.0 ? 'text-red-600'
+          : 'text-slate-500';
 
         return `
           <tr>
@@ -273,6 +339,7 @@
             <td class="px-2 py-2 text-right mono num">${fmtConf(r.medium_term_confidence)}</td>
             <td class="px-3 py-2">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
             <td class="px-2 py-2 text-right mono num">${fmtConf(r.prediction_confidence)}</td>
+            <td class="px-2 py-2 text-right mono num ${convClass}">${fmtConviction(conv)}</td>
             <td class="px-2 py-2 text-xs text-slate-600 max-w-[220px] truncate" title="${(r.prediction_reasoning || '').replace(/"/g, '&quot;')}">${r.prediction_reasoning || '—'}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
@@ -290,11 +357,12 @@
           const q = search.trim().toUpperCase();
           rows = rows.filter((r) => (r.symbol || '').toUpperCase().includes(q));
         }
-        // Sort
+        // Sort. `conviction` is a derived field stored on each row as _conviction.
         const dir = sortDir === 'asc' ? 1 : -1;
+        const field = sortBy === 'conviction' ? '_conviction' : sortBy;
         rows = [...rows].sort((a, b) => {
-          let av = a[sortBy];
-          let bv = b[sortBy];
+          let av = a[field];
+          let bv = b[field];
           if (av == null && bv == null) return 0;
           if (av == null) return 1;
           if (bv == null) return -1;
@@ -343,11 +411,24 @@
           } else {
             sortBy = col;
             // Default to descending for numeric/confidence/score columns
-            const numericDefault = ['price','short_term_confidence','medium_term_confidence','prediction_confidence','hurst','box_dim','lambda'];
+            const numericDefault = ['price','short_term_confidence','medium_term_confidence','prediction_confidence','conviction','hurst','box_dim','lambda'];
             sortDir = numericDefault.includes(col) ? 'desc' : 'asc';
           }
           render();
         });
+      });
+
+      // "Highest Conviction" button — single-click sort by composite conviction
+      // descending (top-bullish at top). Click again to flip to ascending
+      // (top-bearish at top) so the same button covers both screens.
+      document.getElementById('sort-conviction').addEventListener('click', () => {
+        if (sortBy === 'conviction') {
+          sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+        } else {
+          sortBy = 'conviction';
+          sortDir = 'desc';
+        }
+        render();
       });
 
       els.search.addEventListener('input', (e) => {
@@ -374,7 +455,10 @@
           const resp = await fetch(API_URL, { cache: 'no-cache' });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           const data = await resp.json();
-          allScores = Array.isArray(data.scores) ? data.scores : [];
+          allScores = (Array.isArray(data.scores) ? data.scores : []).map((r) => ({
+            ...r,
+            _conviction: convictionScore(r),
+          }));
           els.lastScanned.textContent = data.lastScanned
             ? new Date(data.lastScanned).toLocaleString()
             : '—';
