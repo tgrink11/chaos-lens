@@ -129,6 +129,71 @@
           </section>
 
           <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">The Conviction score — what the button does</h2>
+            <p class="mb-3">
+              The <span class="mono font-semibold">Conviction</span> column and the
+              <span class="text-emerald-700 font-medium">★ Highest Conviction</span> button operationalize the
+              "look for agreement across columns" rule. Every row gets a single signed score that's high when all
+              the directional signals agree and pulls toward zero when they conflict. Sorting by it surfaces the
+              cleanest setups in either direction without you having to scan column-by-column.
+            </p>
+
+            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">The rubric (computed per row at load time)</h3>
+            <div class="overflow-x-auto mb-3">
+              <table class="w-full text-sm border border-slate-200 rounded-md bg-white">
+                <thead class="bg-slate-100 text-xs uppercase tracking-wider text-slate-600">
+                  <tr>
+                    <th class="text-left px-3 py-2">Signal</th>
+                    <th class="text-left px-3 py-2">Contribution</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr><td class="px-3 py-2 mono">15-Day direction</td><td class="px-3 py-2">±(15d Conf ÷ 100), so up to ±0.9</td></tr>
+                  <tr><td class="px-3 py-2 mono">62-Day direction</td><td class="px-3 py-2">±(62d Conf ÷ 100), so up to ±0.9</td></tr>
+                  <tr><td class="px-3 py-2 mono">Prediction</td><td class="px-3 py-2">Thrust Up: +(Pred Conf ÷ 100) · Cascade Down: −(Pred Conf ÷ 100) · Consolidation: 0</td></tr>
+                  <tr><td class="px-3 py-2 mono">Mood</td><td class="px-3 py-2">Euphoria +0.7 · Stealth Build +0.5 · Grind 0 · Panic −0.7</td></tr>
+                  <tr><td class="px-3 py-2 mono">Box dim (D)</td><td class="px-3 py-2">Smoothness bonus amplifies the existing direction by up to ±1.0 (low D = clean line)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="mb-3 text-slate-600">
+              Total range works out to roughly <span class="mono">−4.4</span> … <span class="mono">+4.4</span>.
+              Confidence-weighting means a 90%-confident bullish signal counts more than a 55%-confident one, and
+              a chaotic price path (high D) won't artificially amplify a marginal call.
+            </p>
+
+            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">Color coding</h3>
+            <ul class="space-y-1 mb-3 ml-1">
+              <li><span class="mono font-semibold text-emerald-700">≥ +2.5</span> bold green — high-conviction bullish setup</li>
+              <li><span class="mono text-emerald-600">+1.0 to +2.5</span> green — moderate bullish lean</li>
+              <li><span class="mono text-slate-500">−1.0 to +1.0</span> slate — signals disagree, low conviction</li>
+              <li><span class="mono text-red-600">−2.5 to −1.0</span> red — moderate bearish lean</li>
+              <li><span class="mono font-semibold text-red-700">≤ −2.5</span> bold red — high-conviction bearish setup</li>
+            </ul>
+
+            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">Two ways to sort by it</h3>
+            <ul class="list-disc ml-5 space-y-1.5 mb-3">
+              <li>Click the <span class="text-emerald-700 font-medium">★ Highest Conviction</span> button.
+                First click sorts descending (top-bullish at the top); click again to flip ascending (top-bearish
+                at the top). Same button covers both screens.</li>
+              <li>Or click the <span class="mono">Conviction</span> column header directly — same behavior, plus
+                it stays consistent with how every other column sorts.</li>
+            </ul>
+
+            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">How to interpret the number</h3>
+            <ul class="list-disc ml-5 space-y-1.5">
+              <li><strong>+3.5 or higher</strong> — near-unanimous bullish signals on a smooth path. The model's
+                idea of a "high-conviction long" setup.</li>
+              <li><strong>−3.5 or lower</strong> — near-unanimous bearish signals on a smooth decline. The model's
+                "high-conviction short" call, or at minimum a strong "do not own here" signal.</li>
+              <li><strong>Between −1 and +1</strong> — signals are split. The model can't pick a side; treat as
+                noise unless you have an independent reason to be involved.</li>
+              <li>The score is recomputed every time the page loads from the latest scan data, so it always
+                reflects the most recent cron run.</li>
+            </ul>
+          </section>
+
+          <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">How to use the table</h2>
             <ul class="list-disc ml-5 space-y-1.5">
               <li>Click any column header to sort. Numeric columns sort descending by default; click again to flip.</li>
