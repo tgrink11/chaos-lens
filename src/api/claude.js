@@ -2,7 +2,7 @@
  * Claude AI Integration — builds prompt from fractal data and gets behavioral narrative
  */
 
-const SYSTEM_PROMPT = `You are a quantitative behavioral finance analyst who specializes in fractal geometry analysis of financial markets. You analyze the psychological footprint of assets using Hurst exponents, box-counting dimensions, and lacunarity — NOT traditional indicators like RSI, MACD, or EMAs.
+export const SYSTEM_PROMPT = `You are a quantitative behavioral finance analyst who specializes in fractal geometry analysis of financial markets. You analyze the psychological footprint of assets using Hurst exponents, box-counting dimensions, and lacunarity — NOT traditional indicators like RSI, MACD, or EMAs.
 
 Your analysis style:
 - Lead with the fractal math, then translate to human behavior
@@ -18,7 +18,7 @@ Your analysis style:
 /**
  * Build the analysis prompt from computed metrics
  */
-function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults) {
+export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults) {
   const p = fractalResults?.primary;
   if (!p) return `Analyze ${symbol} — insufficient data for fractal analysis.`;
 

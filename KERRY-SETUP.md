@@ -53,6 +53,23 @@ alter table kerry_scores drop constraint kerry_scores_pkey;
 alter table kerry_scores add primary key (symbol, list_type);
 ```
 
+### 1b. AI-take cache table
+
+Powers the "Get AI take" button on the standalone page. Runs Claude on
+a single Kerry-list ticker on demand and caches the answer for 24 hours
+so repeat clicks the same day are free.
+
+```sql
+create table ai_takes (
+  symbol text primary key,
+  text text not null,
+  model text,
+  generated_at timestamptz not null default now()
+);
+```
+
+No RLS needed (same reasoning as `kerry_scores`).
+
 ### 2. Vercel environment variables
 
 Add these in the chaos-lens project's Vercel settings → Environment Variables:
@@ -66,6 +83,7 @@ Add these in the chaos-lens project's Vercel settings → Environment Variables:
 | `FMP_KEY` | (existing) | Reused from current setup |
 | `SUPABASE_URL` | (existing) | Reused |
 | `SUPABASE_ANON_KEY` | (existing) | Reused |
+| `ANTHROPIC_KEY` | (existing) | Powers the AI-take button; reused from the chaos-lens app's existing config |
 
 ### 3. Sheet permissions
 
