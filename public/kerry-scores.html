@@ -127,9 +127,6 @@
                 you'd see on the full chaos-lens report. First click costs ~$0.01 and the result caches for 24
                 hours so the same stock that day is free; a <em>Refresh</em> link in the panel forces a fresh
                 call.</div>
-              <div><span class="mono font-semibold text-slate-900">Report</span> — Opens the full chaos-lens
-                analysis for that ticker in a new tab: multi-timeframe fractals, behavioral signals, historical
-                analogs, an AI narrative, and a walk-forward backtest.</div>
             </div>
           </section>
 
@@ -271,7 +268,6 @@
               <th class="sortable px-2 py-2.5 text-right" data-sort="box_dim">D<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
               <th class="px-2 py-2.5 text-center" title="Click 'Get AI take' on any row to run Claude on that ticker. First click costs ~$0.01; cached for 24h so the same stock that day is free.">AI Take</th>
-              <th class="px-2 py-2.5 text-center">Report</th>
             </tr>
           </thead>
           <tbody id="rows" class="divide-y divide-slate-100"></tbody>
@@ -405,9 +401,6 @@
         const mood = r.mood || 'GRIND';
         const listLabel = r.list_type === 'tellsheet' ? 'Tell Sheet' : 'Watchlist';
         const listColor = r.list_type === 'tellsheet' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700';
-        const fullReport = r.chaos_lens_url
-          ? `<a href="${r.chaos_lens_url}" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Open ↗</a>`
-          : '—';
 
         // Conviction score is computed on the fly so we never have to migrate
         // schemas when the scoring rubric changes.
@@ -440,7 +433,6 @@
             <td class="px-2 py-2 text-center text-xs">
               <button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>
             </td>
-            <td class="px-2 py-2 text-center text-xs">${fullReport}</td>
           </tr>
         `;
       }
