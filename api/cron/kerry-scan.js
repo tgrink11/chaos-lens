@@ -35,6 +35,39 @@ const CRON_SECRET = process.env.CRON_SECRET;
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 250;
 
+// How many prior days of conviction to retain on each row. Showing 5 in the
+// UI; storing 5 means tomorrow's scan can prepend today's value and drop the
+// oldest without losing anything the UI displays today.
+const CONVICTION_HISTORY_DEPTH = 5;
+
+/**
+ * Composite conviction score (-5.4 … +5.4 in practice). Mirrors the
+ * convictionScore() function in public/kerry-scores.html — if you change one,
+ * change the other. We compute it server-side so we can persist historical
+ * values without having to also persist every input field for every prior day.
+ */
+function computeConviction(r) {
+  let s = 0;
+  const c15 = (r.short_term_confidence || 0) / 100;
+  if (r.short_term_direction === 'bullish') s += c15;
+  else if (r.short_term_direction === 'bearish') s -= c15;
+  const c62 = (r.medium_term_confidence || 0) / 100;
+  if (r.medium_term_direction === 'bullish') s += c62;
+  else if (r.medium_term_direction === 'bearish') s -= c62;
+  const cP = (r.prediction_confidence || 0) / 100;
+  if (r.prediction === 'THRUST_UP') s += cP;
+  else if (r.prediction === 'CASCADE_DOWN') s -= cP;
+  if (r.mood === 'EUPHORIA') s += 0.7;
+  else if (r.mood === 'STEALTH_BUILD') s += 0.5;
+  else if (r.mood === 'PANIC') s -= 0.7;
+  if (Number.isFinite(r.box_dim)) {
+    const smoothness = Math.max(0, 1.5 - r.box_dim);
+    const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
+    s += smoothness * sign * 2;
+  }
+  return Math.round(s * 100) / 100;
+}
+
 /**
  * Fetch a column range from the sheet via Google's gviz endpoint, which
  * preserves the user's row numbering (unlike the CSV export, which splits
@@ -174,6 +207,53 @@ function round3(v) {
 }
 
 /**
+ * Fetch the existing rows (before this scan overwrites them) so we can carry
+ * forward the conviction history. Returns a map of symbol → existing row.
+ */
+async function fetchExistingScores() {
+  const params = new URLSearchParams({
+    select: 'symbol,short_term_direction,short_term_confidence,medium_term_direction,medium_term_confidence,prediction,prediction_confidence,mood,box_dim,scanned_at,conviction_history',
+  });
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/kerry_scores?${params}`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+  if (!resp.ok) return new Map(); // first-ever scan, table empty — fine
+  const rows = await resp.json().catch(() => []);
+  const map = new Map();
+  for (const row of rows) map.set(row.symbol, row);
+  return map;
+}
+
+/**
+ * Build the conviction_history array for a fresh row by prepending the
+ * previously-scanned row's conviction (computed from its stored fields)
+ * to the existing history, then capping at CONVICTION_HISTORY_DEPTH.
+ *
+ * Each entry: { date: 'YYYY-MM-DD', value: <conviction> }.
+ *
+ * `date` is the date of the previous scan (the day that value applies to),
+ * not today — today's conviction is computed on the fly by the UI from the
+ * row's current fields, exactly like before.
+ */
+function buildConvictionHistory(existingRow) {
+  if (!existingRow) return [];
+  const prevConv = computeConviction(existingRow);
+  if (!Number.isFinite(prevConv)) return existingRow.conviction_history || [];
+  const prevDate = existingRow.scanned_at
+    ? String(existingRow.scanned_at).split('T')[0]
+    : null;
+  const prevHistory = Array.isArray(existingRow.conviction_history)
+    ? existingRow.conviction_history
+    : [];
+  // Don't double-record if today's scan ran twice (e.g. manual + cron).
+  if (prevDate && prevHistory[0]?.date === prevDate) return prevHistory;
+  return [{ date: prevDate, value: prevConv }, ...prevHistory].slice(0, CONVICTION_HISTORY_DEPTH);
+}
+
+/**
  * Upsert a batch of rows to Supabase via PostgREST.
  * Uses `resolution=merge-duplicates` so existing rows update in place.
  */
@@ -241,13 +321,25 @@ export default async function handler(req, res) {
     const lists = await loadSymbols();
     const totals = { tellsheet: lists.tellsheet.length, watchlist: lists.watchlist.length };
 
+    // Snapshot existing rows BEFORE scoring so we can carry forward each
+    // symbol's prior conviction into the new row's history column.
+    const existing = await fetchExistingScores();
+
     // Score both lists. Tell Sheet first (smaller, and most-watched).
     const tellResult = await scoreInBatches(lists.tellsheet, 'tellsheet');
     const watchResult = await scoreInBatches(lists.watchlist, 'watchlist');
 
+    // Attach conviction_history to every newly-scored row.
+    const attach = (row) => ({
+      ...row,
+      conviction_history: buildConvictionHistory(existing.get(row.symbol)),
+    });
+    const tellRows = tellResult.scored.map(attach);
+    const watchRows = watchResult.scored.map(attach);
+
     // Upsert all results in one round-trip per list to avoid hammering Supabase.
-    await upsertScores(tellResult.scored);
-    await upsertScores(watchResult.scored);
+    await upsertScores(tellRows);
+    await upsertScores(watchRows);
 
     return res.status(200).json({
       ok: true,

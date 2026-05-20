@@ -394,6 +394,30 @@
         return (v >= 0 ? '+' : '') + v.toFixed(2);
       }
 
+      // Renders the prior-5-days mini-row that sits under today's conviction.
+      // Each value is color-coded with the same green/red thresholds used for
+      // the main number, but with smaller, dimmer styling so it doesn't compete
+      // for attention.
+      function convictionHistoryHtml(history) {
+        if (!Array.isArray(history) || history.length === 0) {
+          return '<div class="text-[10px] text-slate-300 mt-0.5">no prior days</div>';
+        }
+        // Show oldest → newest (left → right) so the rightmost value sits
+        // closest to today's number, reading like a timeline up to "now."
+        const ordered = [...history].reverse();
+        const cells = ordered.map((h) => {
+          const v = h?.value;
+          if (!Number.isFinite(v)) return '<span class="text-slate-300">·</span>';
+          const cls = v >= 1.0 ? 'text-emerald-600'
+                    : v <= -1.0 ? 'text-red-600'
+                    : 'text-slate-400';
+          const title = h.date ? `${h.date}: ${(v >= 0 ? '+' : '') + v.toFixed(2)}` : '';
+          const text = (v >= 0 ? '+' : '') + v.toFixed(1);
+          return `<span class="${cls}" title="${title}">${text}</span>`;
+        }).join(' ');
+        return `<div class="text-[10px] mono mt-0.5" title="Prior ${ordered.length} day(s) — oldest left, most recent right">${cells}</div>`;
+      }
+
       function rowHtml(r) {
         const dir15 = (r.short_term_direction || 'neutral').toLowerCase();
         const dir62 = (r.medium_term_direction || 'neutral').toLowerCase();
@@ -424,7 +448,10 @@
             <td class="px-2 py-2 text-right mono num">${fmtConf(r.medium_term_confidence)}</td>
             <td class="px-3 py-2">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
             <td class="px-2 py-2 text-right mono num">${fmtConf(r.prediction_confidence)}</td>
-            <td class="px-2 py-2 text-right mono num ${convClass}">${fmtConviction(conv)}</td>
+            <td class="px-2 py-2 text-right mono num ${convClass}">
+              ${fmtConviction(conv)}
+              ${convictionHistoryHtml(r.conviction_history)}
+            </td>
             <td class="px-2 py-2 text-xs text-slate-600 max-w-[220px] truncate" title="${(r.prediction_reasoning || '').replace(/"/g, '&quot;')}">${r.prediction_reasoning || '—'}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>

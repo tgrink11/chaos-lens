@@ -37,11 +37,26 @@ create table kerry_scores (
   box_dim numeric,
   lambda numeric,
   chaos_lens_url text,
+  conviction_history jsonb not null default '[]'::jsonb,
   scanned_at timestamptz not null default now()
 );
 
 create index kerry_scores_list_type_idx on kerry_scores (list_type);
 ```
+
+**If the table already exists**, add the new column in place:
+
+```sql
+alter table kerry_scores
+  add column if not exists conviction_history jsonb not null default '[]'::jsonb;
+```
+
+`conviction_history` stores the prior N days of computed conviction scores
+as `[{date: 'YYYY-MM-DD', value: number}, ...]`, newest first. The cron
+prepends yesterday's value on each run and caps at 5 entries. The UI
+displays them as a small mini-row under today's conviction number. History
+populates organically — there will be 0 prior days after the first scan,
+1 after the second, etc.
 
 If a symbol appears on both lists (e.g., HUT, MRVL), it'll exist as one row
 with whichever `list_type` was upserted last. If you'd rather have one row
@@ -164,6 +179,10 @@ Each row:
   box_dim: number;                     // 1-2
   lambda: number;                      // ≥ 1
   chaos_lens_url: string | null;       // deep-link to full report
+  conviction_history: Array<{          // prior days, newest first; max 5
+    date: string | null;               // 'YYYY-MM-DD' of that scan
+    value: number;                     // computed conviction for that day
+  }>;
   scanned_at: string;                  // ISO 8601
 }
 ```
