@@ -28,7 +28,7 @@
             </p>
           </div>
         </div>
-        <div class="flex items-start gap-4">
+        <div class="flex items-start gap-2 flex-wrap">
           <button
             id="explain-toggle"
             class="text-sm font-medium text-blue-700 hover:text-blue-800 border border-blue-200 hover:border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-md px-3 py-1.5 transition-colors"
@@ -38,7 +38,19 @@
             <span id="explain-toggle-label">How this works</span>
             <span id="explain-toggle-arrow" class="inline-block ml-1">▾</span>
           </button>
-          <div class="text-xs text-slate-500 mono text-right">
+          <a
+            href="https://youtu.be/dUcf8QVHPpM"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center text-sm font-medium text-red-700 hover:text-red-800 border border-red-200 hover:border-red-300 bg-red-50 hover:bg-red-100 rounded-md px-3 py-1.5 transition-colors"
+            title="Open Kerry's Fractal Analyzer walkthrough on YouTube (opens in a new tab)"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-1.5" aria-hidden="true">
+              <path d="M21.582 6.186a2.506 2.506 0 0 0-1.768-1.768C18.254 4 12 4 12 4s-6.254 0-7.814.418a2.506 2.506 0 0 0-1.768 1.768C2 7.746 2 12 2 12s0 4.254.418 5.814a2.506 2.506 0 0 0 1.768 1.768C5.746 20 12 20 12 20s6.254 0 7.814-.418a2.506 2.506 0 0 0 1.768-1.768C22 16.254 22 12 22 12s0-4.254-.418-5.814zM10 15.5v-7l6 3.5-6 3.5z"/>
+            </svg>
+            Watch walkthrough
+          </a>
+          <div class="text-xs text-slate-500 mono text-right ml-2">
             <div>Last scanned: <span id="last-scanned" class="text-slate-700">—</span></div>
             <div>Total symbols: <span id="row-count" class="text-slate-700">—</span></div>
           </div>
