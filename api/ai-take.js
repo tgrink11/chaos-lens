@@ -119,15 +119,11 @@ async function writeCache(row) {
   });
 }
 
-async function symbolIsInKerryList(symbol) {
-  const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/kerry_scores?symbol=eq.${symbol}&select=symbol&limit=1`,
-    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-  );
-  if (!resp.ok) return false;
-  const rows = await resp.json().catch(() => []);
-  return Array.isArray(rows) && rows.length > 0;
-}
+// Kerry-list gate removed: subscribers can now run AI takes on any valid
+// ticker via the "Analyze any ticker" input on the Kerry's Fractal Scores
+// page. Cost containment relies on the 24h Supabase cache + a downstream
+// FMP fetch that fails-closed for invalid symbols, so the worst-case
+// abuse footprint is one Claude call per unique symbol per day.
 
 export default async function handler(req, res) {
   setCors(req, res);
@@ -143,13 +139,6 @@ export default async function handler(req, res) {
 
   if (!/^[A-Z]{1,5}$/.test(symbol)) {
     return res.status(400).json({ error: 'invalid symbol' });
-  }
-
-  // Surface-area guard: only Kerry-list symbols are eligible. Without this,
-  // a curl loop could request arbitrary tickers and burn Claude credit.
-  const inList = await symbolIsInKerryList(symbol);
-  if (!inList) {
-    return res.status(404).json({ error: 'symbol not on Kerry list' });
   }
 
   // Cache check

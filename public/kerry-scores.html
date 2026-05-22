@@ -143,6 +143,18 @@
           </section>
 
           <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Analyze any ticker</h2>
+            <p>
+              The <em>Analyze any ticker…</em> input next to <span class="text-emerald-700">★ Highest Conviction</span>
+              runs the same fractal pipeline on any US ticker you enter — not just the Kerry lists. The result
+              renders as an amber-highlighted row at the top of the table with the identical column layout, so
+              you can compare your own watchlist names against Kerry's lists side-by-side. The
+              <span class="mono">Get AI take</span> button works on custom rows too. Click <em>Clear</em> in the
+              row to remove it.
+            </p>
+          </section>
+
+          <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">Why the AI Take sometimes disagrees with the columns</h2>
             <p class="mb-2">
               The 15-Day, 62-Day, Prediction, and Conviction columns are produced by <strong>deterministic
@@ -252,6 +264,25 @@
         <button id="sort-conviction" class="px-3 py-1.5 text-sm rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors" title="Sort by composite conviction score: most-bullish at top, most-bearish at bottom">
           ★ Highest Conviction
         </button>
+        <div class="w-px h-6 bg-slate-300 mx-1"></div>
+        <form id="custom-analyze-form" class="flex items-center gap-1" autocomplete="off">
+          <input
+            id="custom-symbol"
+            type="text"
+            placeholder="Analyze any ticker…"
+            class="text-sm border border-slate-300 rounded-md px-3 py-1.5 w-44 uppercase"
+            maxlength="5"
+            spellcheck="false"
+            title="Enter any US ticker (1–5 letters) to get the same fractal analysis used for Kerry's lists"
+          />
+          <button
+            type="submit"
+            id="custom-analyze-btn"
+            class="px-3 py-1.5 text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            Analyze
+          </button>
+        </form>
         <div class="grow"></div>
         <input id="search" type="search" placeholder="Filter by symbol…" class="text-sm border border-slate-300 rounded-md px-3 py-1.5 w-56" />
       </div>
@@ -309,6 +340,13 @@
       let search = '';
       let sortBy = 'symbol';
       let sortDir = 'asc';
+
+      // Custom-ticker analysis state. customRow is the analyzed row data
+      // (same shape as a kerry_scores row); customStatus is 'idle' |
+      // 'loading' | 'error'; customError is the last error message.
+      let customRow = null;
+      let customStatus = 'idle';
+      let customError = null;
 
       // ---------- Render helpers ----------
 
@@ -435,8 +473,25 @@
         const dir62 = (r.medium_term_direction || 'neutral').toLowerCase();
         const pred = r.prediction || 'CONSOLIDATION';
         const mood = r.mood || 'GRIND';
-        const listLabel = r.list_type === 'tellsheet' ? 'Tell Sheet' : 'Watchlist';
-        const listColor = r.list_type === 'tellsheet' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-700';
+        const isCustom = r.list_type === 'custom';
+        const listLabel = isCustom ? 'Custom'
+          : r.list_type === 'tellsheet' ? 'Tell Sheet'
+          : 'Watchlist';
+        const listColor = isCustom ? 'bg-amber-100 text-amber-800'
+          : r.list_type === 'tellsheet' ? 'bg-blue-50 text-blue-700'
+          : 'bg-slate-100 text-slate-700';
+        // Custom rows get a colored left border + soft background so the
+        // user can tell at a glance that this row isn't part of the Kerry
+        // lists.
+        const rowAttrs = isCustom
+          ? ' class="bg-amber-50/50 border-l-4 border-amber-400"'
+          : '';
+        const aiTakeCell = isCustom
+          ? `<button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>
+             <div class="mt-1">
+               <button class="custom-clear-btn text-xs text-slate-400 hover:text-red-600">Clear</button>
+             </div>`
+          : `<button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>`;
 
         // Conviction score is computed on the fly so we never have to migrate
         // schemas when the scoring rubric changes.
@@ -450,7 +505,7 @@
           : 'text-slate-500';
 
         return `
-          <tr>
+          <tr${rowAttrs}>
             <td class="px-2 py-2 mono font-semibold">${r.symbol}</td>
             <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtPrice(r.price)}</td>
@@ -469,8 +524,33 @@
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.lambda)}</td>
-            <td class="px-2 py-2 text-center text-xs">
-              <button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>
+            <td class="px-2 py-2 text-center text-xs">${aiTakeCell}</td>
+          </tr>
+        `;
+      }
+
+      // Custom-row variants: loading + error placeholders.
+      function customLoadingRowHtml(symbol) {
+        return `
+          <tr class="bg-amber-50/50 border-l-4 border-amber-400">
+            <td colspan="16" class="px-4 py-3 text-sm text-slate-600">
+              <span class="inline-block w-3 h-3 border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin mr-2 align-middle"></span>
+              Analyzing <span class="mono font-semibold">${symbol}</span>… (fetching 2y of price history + running fractals)
+            </td>
+          </tr>
+        `;
+      }
+
+      function customErrorRowHtml(symbol, error) {
+        return `
+          <tr class="bg-red-50 border-l-4 border-red-400">
+            <td colspan="16" class="px-4 py-3 text-sm">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-red-700">
+                  <strong class="mono">${symbol}</strong>: ${error}
+                </div>
+                <button class="custom-clear-btn text-xs text-slate-500 hover:text-red-700">Dismiss</button>
+              </div>
             </td>
           </tr>
         `;
@@ -502,7 +582,19 @@
 
       function render() {
         const rows = applyFilters();
-        els.rows.innerHTML = rows.map(rowHtml).join('');
+        // Render custom-analysis row at the very top of the tbody, above
+        // all Kerry rows. Loading / error states get placeholder rows.
+        let customHtml = '';
+        if (customStatus === 'loading') {
+          const symbol = (customRow && customRow.symbol) || '…';
+          customHtml = customLoadingRowHtml(symbol);
+        } else if (customStatus === 'error') {
+          const symbol = (customRow && customRow.symbol) || '?';
+          customHtml = customErrorRowHtml(symbol, customError || 'Analysis failed');
+        } else if (customRow) {
+          customHtml = rowHtml(customRow);
+        }
+        els.rows.innerHTML = customHtml + rows.map(rowHtml).join('');
         // Update sort arrows
         document.querySelectorAll('[data-sort]').forEach((th) => {
           const arrow = th.querySelector('.sort-arrow');
@@ -555,6 +647,66 @@
           sortDir = 'desc';
         }
         render();
+      });
+
+      // ---------- Custom ticker analyzer ----------
+      //
+      // User types any 1-5 letter US ticker, hits Analyze (or Enter), and
+      // a new row appears at the top of the table with the same fractal
+      // breakdown that Kerry-list rows get. The row uses an amber pill +
+      // amber left-border so it's visually distinct.
+      const customForm = document.getElementById('custom-analyze-form');
+      const customInput = document.getElementById('custom-symbol');
+      const customBtn = document.getElementById('custom-analyze-btn');
+
+      customForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const raw = (customInput.value || '').toUpperCase().trim();
+        if (!raw) return;
+        if (!/^[A-Z]{1,5}$/.test(raw)) {
+          customRow = { symbol: raw };
+          customError = 'Symbol must be 1–5 capital letters (e.g. AAPL).';
+          customStatus = 'error';
+          render();
+          return;
+        }
+        // Drop any prior expanded AI-take rows so a stale one doesn't
+        // confuse the user when a new analysis lands.
+        document.querySelectorAll('tr[data-expansion]').forEach(r => r.remove());
+
+        customRow = { symbol: raw };
+        customStatus = 'loading';
+        customError = null;
+        customBtn.disabled = true;
+        customBtn.classList.add('opacity-60');
+        render();
+
+        try {
+          const resp = await fetch(`/api/analyze-ticker?symbol=${encodeURIComponent(raw)}`, {
+            cache: 'no-store',
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+          customRow = { ...data, _conviction: convictionScore(data) };
+          customStatus = 'idle';
+          customError = null;
+        } catch (e) {
+          customRow = { symbol: raw };
+          customStatus = 'error';
+          customError = e.message;
+        } finally {
+          customBtn.disabled = false;
+          customBtn.classList.remove('opacity-60');
+          render();
+        }
+      });
+
+      // Uppercase as the user types so the displayed value matches what
+      // we'll submit.
+      customInput.addEventListener('input', (event) => {
+        const start = event.target.selectionStart;
+        event.target.value = event.target.value.toUpperCase();
+        try { event.target.setSelectionRange(start, start); } catch {}
       });
 
       els.search.addEventListener('input', (e) => {
@@ -680,6 +832,23 @@
       }
 
       els.rows.addEventListener('click', (event) => {
+        // Custom-row "Clear" / "Dismiss" — wipe the custom row state and
+        // re-render so the Kerry rows reflow back to the top.
+        const clearBtn = event.target.closest('button.custom-clear-btn');
+        if (clearBtn) {
+          // Also close any AI-take expansion that belongs to the custom row.
+          if (customRow?.symbol) {
+            const exp = document.querySelector(`tr[data-expansion="${customRow.symbol}"]`);
+            if (exp) exp.remove();
+          }
+          customRow = null;
+          customStatus = 'idle';
+          customError = null;
+          customInput.value = '';
+          render();
+          return;
+        }
+
         const btn = event.target.closest('button.ai-take-btn');
         if (btn) {
           const symbol = btn.dataset.symbol;
