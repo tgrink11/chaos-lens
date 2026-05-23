@@ -260,6 +260,7 @@
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="tellsheet">Tell Sheet</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="watchlist">Watchlist</button>
+        <button id="bus-research-pill" class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="bus_research" title="Tickers from Trent's Investment Research">BUS! Research <span id="bus-research-count" class="text-xs text-slate-500"></span></button>
         <div class="w-px h-6 bg-slate-300 mx-1"></div>
         <button id="sort-conviction" class="px-3 py-1.5 text-sm rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors" title="Sort by composite conviction score: most-bullish at top, most-bearish at bottom">
           ★ Highest Conviction
@@ -325,6 +326,11 @@
     <script type="module">
       const API_URL = '/api/kerry-scores';
 
+      // Trent's Investment Research — Supabase (same project as trents-research.vercel.app)
+      // Anon key is safe to embed in client code; RLS protects writes.
+      const BUS_RESEARCH_URL = 'https://eerrybamcwhqgzjssjby.supabase.co/rest/v1/research_entries?select=symbol';
+      const BUS_RESEARCH_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlcnJ5YmFtY3docWd6anNzamJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNDczNDcsImV4cCI6MjA5MjcyMzM0N30.DPqAPuHXkdrFKiJfzxzu0rQ_Pu2kgLuAZijllAgP640';
+
       const $ = (sel) => document.querySelector(sel);
       const els = {
         status: $('#status'),
@@ -340,6 +346,23 @@
       let search = '';
       let sortBy = 'symbol';
       let sortDir = 'asc';
+      let busResearchSymbols = new Set(); // Trent's research tickers
+
+      async function loadBusResearchSymbols() {
+        try {
+          const res = await fetch(BUS_RESEARCH_URL, {
+            headers: { apikey: BUS_RESEARCH_KEY, Authorization: `Bearer ${BUS_RESEARCH_KEY}` },
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const rows = await res.json();
+          busResearchSymbols = new Set(rows.map(r => (r.symbol || '').toUpperCase()).filter(Boolean));
+          const countEl = document.getElementById('bus-research-count');
+          if (countEl) countEl.textContent = busResearchSymbols.size ? `(${busResearchSymbols.size})` : '';
+        } catch (e) {
+          console.warn('Could not load BUS! Research symbols:', e);
+        }
+      }
+      loadBusResearchSymbols();
 
       // Custom-ticker analysis state. customRow is the analyzed row data
       // (same shape as a kerry_scores row); customStatus is 'idle' |
@@ -558,7 +581,11 @@
 
       function applyFilters() {
         let rows = allScores;
-        if (filter !== 'all') rows = rows.filter((r) => r.list_type === filter);
+        if (filter === 'bus_research') {
+          rows = rows.filter((r) => busResearchSymbols.has((r.symbol || '').toUpperCase()));
+        } else if (filter !== 'all') {
+          rows = rows.filter((r) => r.list_type === filter);
+        }
         if (search.trim()) {
           const q = search.trim().toUpperCase();
           rows = rows.filter((r) => (r.symbol || '').toUpperCase().includes(q));
