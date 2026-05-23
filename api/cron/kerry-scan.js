@@ -138,7 +138,9 @@ async function loadBusResearchSymbols() {
 async function fetchDailyOHLCV(symbol) {
   const from = isoDateOffset(-730);
   const to = isoDateOffset(0);
-  const histUrl = `https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}?from=${from}&to=${to}&apikey=${FMP_KEY}`;
+  // Migrated from v3/historical-price-full (deprecated for accounts created
+  // after Aug 31, 2025) to /stable/historical-price-eod/full.
+  const histUrl = `https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=${encodeURIComponent(symbol)}&from=${from}&to=${to}&apikey=${FMP_KEY}`;
 
   const histResp = await fetch(histUrl).catch(() => null);
   if (!histResp?.ok) return null;
