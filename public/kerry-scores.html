@@ -497,10 +497,13 @@
         const pred = r.prediction || 'CONSOLIDATION';
         const mood = r.mood || 'GRIND';
         const isCustom = r.list_type === 'custom';
+        const isBus    = r.list_type === 'bus_research';
         const listLabel = isCustom ? 'Custom'
+          : isBus ? 'BUS! Research'
           : r.list_type === 'tellsheet' ? 'Tell Sheet'
           : 'Watchlist';
         const listColor = isCustom ? 'bg-amber-100 text-amber-800'
+          : isBus ? 'bg-emerald-100 text-emerald-800'
           : r.list_type === 'tellsheet' ? 'bg-blue-50 text-blue-700'
           : 'bg-slate-100 text-slate-700';
         // Custom rows get a colored left border + soft background so the

@@ -32,6 +32,12 @@ const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 const CHAOS_LENS_URL = process.env.CHAOS_LENS_URL || ''; // e.g. https://chaos-lens.vercel.app
 const CRON_SECRET = process.env.CRON_SECRET;
 
+// Trent's Investment Research — separate Supabase project (read-only).
+// Anon key is safe to embed; RLS gates writes. Used to pull research tickers
+// so they get fractal-scored alongside Tell Sheet + Watchlist.
+const BUS_RESEARCH_URL = 'https://eerrybamcwhqgzjssjby.supabase.co/rest/v1/research_entries?select=symbol';
+const BUS_RESEARCH_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlcnJ5YmFtY3docWd6anNzamJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNDczNDcsImV4cCI6MjA5MjcyMzM0N30.DPqAPuHXkdrFKiJfzxzu0rQ_Pu2kgLuAZijllAgP640';
+
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 250;
 
@@ -95,6 +101,30 @@ async function loadSymbols() {
     out[listType] = [...new Set(all)]; // dedupe within list
   }
   return out;
+}
+
+/**
+ * Pull ticker symbols from Trent's Investment Research Supabase. Returns an
+ * uppercase, deduped array. Soft-fails: if the fetch breaks for any reason,
+ * we log and return [] so the Tell Sheet + Watchlist scan still runs.
+ */
+async function loadBusResearchSymbols() {
+  try {
+    const resp = await fetch(BUS_RESEARCH_URL, {
+      headers: { apikey: BUS_RESEARCH_KEY, Authorization: `Bearer ${BUS_RESEARCH_KEY}` },
+    });
+    if (!resp.ok) {
+      console.warn(`BUS! Research fetch failed: ${resp.status}`);
+      return [];
+    }
+    const rows = await resp.json();
+    return [...new Set(rows
+      .map(r => String(r?.symbol || '').toUpperCase().trim())
+      .filter(s => /^[A-Z]{1,5}$/.test(s)))];
+  } catch (e) {
+    console.warn('BUS! Research fetch error:', e.message);
+    return [];
+  }
 }
 
 /**
@@ -319,15 +349,30 @@ export default async function handler(req, res) {
   const startedAt = Date.now();
   try {
     const lists = await loadSymbols();
-    const totals = { tellsheet: lists.tellsheet.length, watchlist: lists.watchlist.length };
+
+    // BUS! Research tickers that aren't already on Tell Sheet or Watchlist —
+    // those are the ones missing from the scan. Tickers already on one of the
+    // two lists get scored under their existing list_type (no double-scoring).
+    const busAll = await loadBusResearchSymbols();
+    const tellSet = new Set(lists.tellsheet);
+    const watchSet = new Set(lists.watchlist);
+    const busOnly = busAll.filter(s => !tellSet.has(s) && !watchSet.has(s));
+
+    const totals = {
+      tellsheet: lists.tellsheet.length,
+      watchlist: lists.watchlist.length,
+      bus_research_total: busAll.length,
+      bus_research_only: busOnly.length,
+    };
 
     // Snapshot existing rows BEFORE scoring so we can carry forward each
     // symbol's prior conviction into the new row's history column.
     const existing = await fetchExistingScores();
 
-    // Score both lists. Tell Sheet first (smaller, and most-watched).
+    // Score all three lists. Tell Sheet first (smaller, and most-watched).
     const tellResult = await scoreInBatches(lists.tellsheet, 'tellsheet');
     const watchResult = await scoreInBatches(lists.watchlist, 'watchlist');
+    const busResult = await scoreInBatches(busOnly, 'bus_research');
 
     // Attach conviction_history to every newly-scored row.
     const attach = (row) => ({
@@ -336,17 +381,20 @@ export default async function handler(req, res) {
     });
     const tellRows = tellResult.scored.map(attach);
     const watchRows = watchResult.scored.map(attach);
+    const busRows = busResult.scored.map(attach);
 
     // Upsert all results in one round-trip per list to avoid hammering Supabase.
     await upsertScores(tellRows);
     await upsertScores(watchRows);
+    await upsertScores(busRows);
 
     return res.status(200).json({
       ok: true,
       elapsedMs: Date.now() - startedAt,
       totals,
-      tellsheet: { scored: tellResult.scored.length, failed: tellResult.failCount },
-      watchlist: { scored: watchResult.scored.length, failed: watchResult.failCount },
+      tellsheet:    { scored: tellResult.scored.length,  failed: tellResult.failCount },
+      watchlist:    { scored: watchResult.scored.length, failed: watchResult.failCount },
+      bus_research: { scored: busResult.scored.length,   failed: busResult.failCount },
     });
   } catch (e) {
     return res.status(500).json({ error: e.message, elapsedMs: Date.now() - startedAt });
