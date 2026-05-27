@@ -123,9 +123,19 @@
                 setup; <strong>near zero</strong> = signals disagree. Click the
                 <span class="text-emerald-700">★ Highest Conviction</span> button to sort the table this way —
                 first click puts the most-bullish at the top, second click flips to most-bearish.</div>
-              <div><span class="mono font-semibold text-slate-900">Top Reason</span> — The highest-weighted signal
-                that drove the prediction. Hover for the full text. Examples: "Hurst 0.66 persistent + uptrend",
-                "Box dimension 1.12 — smooth decline", "Volume spike on decline — capitulation risk".</div>
+              <div><span class="mono font-semibold text-slate-900">Trend</span> — Four small pills show whether
+                today's price sits above (green ▲) or below (red ▼) the 9, 15, 62, and 200-day simple moving
+                averages. Hover any pill for the actual MA value and the price's % gap to it. A green-green-
+                green-green stack is a clean uptrend; mixed colors mean the trend is transitioning. The 9 vs 15
+                relationship is the most short-term signal; 62 vs 200 is the long-term backdrop.</div>
+              <div><span class="mono font-semibold text-slate-900">Setup</span> — The phase of the trend cycle:
+                <strong>Accum</strong> (blue) flags the quiet build-up phase — short-term MAs turning up,
+                conviction rising but not yet spiking. <strong>Breakout</strong> (bold green) flags the day
+                conviction jumped from sub-1.5 to over 2.0 with price above the short MA stack.
+                <strong>Extended</strong> (orange) means conviction has been hot for 4+ of the last 5 days —
+                trend is mature, chasing here is risky. <strong>Uptrend</strong> / <strong>Downtrend</strong>
+                are the stable in-trend states. <strong>Neutral</strong> means no edge. The signal you want
+                for catching moves early is <em>Accum</em>.</div>
               <div><span class="mono font-semibold text-slate-900">Mood</span> — Market psychology label.
                 <em>Euphoria</em> = trending up with healthy structure;
                 <em>Panic</em> = breakdown plus high fear;
@@ -306,7 +316,8 @@
               <th class="sortable px-2 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
-              <th class="px-2 py-2.5 text-left">Top Reason</th>
+              <th class="px-2 py-2.5 text-center" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
+              <th class="sortable px-2 py-2.5 text-left" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="hurst">H<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="box_dim">D<span class="sort-arrow"></span></th>
@@ -491,6 +502,53 @@
         return `<div class="text-[10px] mono mt-0.5" title="Prior ${ordered.length} day(s) — oldest left, most recent right">${cells}</div>`;
       }
 
+      // Trend cell: 4 small pills (9, 15, 62, 200) colored by whether
+      // today's price is above or below that SMA. Tooltip on each pill
+      // shows the actual MA value so users can see the structure rather
+      // than just a binary up/down.
+      function trendCellHtml(r) {
+        const price = r.price;
+        const mas = [
+          { label: '9', val: r.sma_9 },
+          { label: '15', val: r.sma_15 },
+          { label: '62', val: r.sma_62 },
+          { label: '200', val: r.sma_200 },
+        ];
+        const pills = mas.map(({ label, val }) => {
+          if (val == null || !Number.isFinite(val) || price == null) {
+            return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono bg-slate-100 text-slate-400" title="${label}-day SMA: insufficient history">${label} —</span>`;
+          }
+          const above = price > val;
+          const cls = above
+            ? 'bg-emerald-100 text-emerald-800'
+            : 'bg-red-100 text-red-800';
+          const arrow = above ? '▲' : '▼';
+          const pctGap = ((price - val) / val) * 100;
+          const tooltip = `${label}-day SMA: $${val.toFixed(2)} (price ${pctGap >= 0 ? '+' : ''}${pctGap.toFixed(1)}%)`;
+          return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono ${cls}" title="${tooltip}">${label} ${arrow}</span>`;
+        }).join(' ');
+        return `<div class="flex gap-1 justify-center flex-wrap">${pills}</div>`;
+      }
+
+      // Setup badge: one of ACCUMULATING / BREAKOUT / EXTENDED / UPTREND /
+      // DOWNTREND / NEUTRAL / null. Each gets a distinct color so the user
+      // can scan-sort by visual weight without re-reading every cell.
+      const SETUP_CONFIG = {
+        ACCUMULATING: { label: 'Accum', cls: 'bg-blue-100 text-blue-800 ring-1 ring-blue-300', title: 'Quiet build-up phase: short-term MAs turning up, conviction rising but not yet a spike. The pre-breakout signal you want to catch.' },
+        BREAKOUT: { label: 'Breakout', cls: 'bg-emerald-100 text-emerald-800 font-semibold ring-1 ring-emerald-400', title: 'Conviction just spiked from sub-1.5 to >2.0 with price above short MA stack. Move is happening now.' },
+        EXTENDED: { label: 'Extended', cls: 'bg-orange-100 text-orange-800', title: '4+ of the last 5 days at conviction >2.5. Trend is mature; chasing here is risky.' },
+        UPTREND: { label: 'Uptrend', cls: 'bg-emerald-50 text-emerald-700', title: 'Full stacked MA uptrend (price > 9 > 15 > 62 > 200). Trend already in place.' },
+        DOWNTREND: { label: 'Downtrend', cls: 'bg-red-50 text-red-700', title: 'Full stacked MA downtrend (price < 9 < 15 < 62 < 200).' },
+        NEUTRAL: { label: 'Neutral', cls: 'bg-slate-100 text-slate-500', title: 'No distinctive setup right now — mixed MA stack or no conviction edge.' },
+      };
+
+      function setupBadgeHtml(setup) {
+        if (!setup) return '<span class="text-slate-400 text-xs">—</span>';
+        const cfg = SETUP_CONFIG[setup];
+        if (!cfg) return `<span class="text-xs">${setup}</span>`;
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${cfg.title}">${cfg.label}</span>`;
+      }
+
       function rowHtml(r) {
         const dir15 = (r.short_term_direction || 'neutral').toLowerCase();
         const dir62 = (r.medium_term_direction || 'neutral').toLowerCase();
@@ -545,7 +603,8 @@
               ${fmtConviction(conv)}
               ${convictionHistoryHtml(r.conviction_history)}
             </td>
-            <td class="px-2 py-2 text-xs text-slate-600 max-w-[220px] truncate" title="${(r.prediction_reasoning || '').replace(/"/g, '&quot;')}">${r.prediction_reasoning || '—'}</td>
+            <td class="px-2 py-2 text-center">${trendCellHtml(r)}</td>
+            <td class="px-2 py-2">${setupBadgeHtml(r.setup)}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}</td>
@@ -559,7 +618,7 @@
       function customLoadingRowHtml(symbol) {
         return `
           <tr class="bg-amber-50/50 border-l-4 border-amber-400">
-            <td colspan="16" class="px-4 py-3 text-sm text-slate-600">
+            <td colspan="17" class="px-4 py-3 text-sm text-slate-600">
               <span class="inline-block w-3 h-3 border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin mr-2 align-middle"></span>
               Analyzing <span class="mono font-semibold">${symbol}</span>… (fetching 2y of price history + running fractals)
             </td>
@@ -570,7 +629,7 @@
       function customErrorRowHtml(symbol, error) {
         return `
           <tr class="bg-red-50 border-l-4 border-red-400">
-            <td colspan="16" class="px-4 py-3 text-sm">
+            <td colspan="17" class="px-4 py-3 text-sm">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-red-700">
                   <strong class="mono">${symbol}</strong>: ${error}

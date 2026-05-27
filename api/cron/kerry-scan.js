@@ -14,6 +14,7 @@ import { runBehavioralAnalysis } from '../../src/engine/behavioral.js';
 import { classifyMood } from '../../src/engine/mood.js';
 import { findAnalogs } from '../../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../../src/engine/prediction.js';
+import { computeTrend } from '../../src/engine/trend.js';
 
 const SHEET_ID = process.env.KERRY_SHEET_ID;
 const SHEET_GID = process.env.KERRY_SHEET_GID || '0';
@@ -175,9 +176,11 @@ function isoDateOffset(days) {
 
 /**
  * Score a single symbol end-to-end. Returns a row ready to upsert,
- * or null if data is insufficient.
+ * or null if data is insufficient. `prevHistory` is the existing row's
+ * conviction_history array (newest first) — used by computeTrend to
+ * detect accumulation/breakout transitions.
  */
-async function scoreSymbol(symbol, listType) {
+async function scoreSymbol(symbol, listType, prevHistory) {
   const fetched = await fetchDailyOHLCV(symbol);
   if (!fetched?.daily?.close?.length || fetched.daily.close.length < 60) {
     return null;
@@ -211,7 +214,7 @@ async function scoreSymbol(symbol, listType) {
     ? `${CHAOS_LENS_URL}/?symbol=${encodeURIComponent(symbol)}&type=stock`
     : null;
 
-  return {
+  const partial = {
     symbol,
     list_type: listType,
     name: null,
@@ -229,6 +232,20 @@ async function scoreSymbol(symbol, listType) {
     lambda: round3(primary.lacunarity.lambda),
     chaos_lens_url: chaosUrl,
     scanned_at: new Date().toISOString(),
+  };
+
+  // Trend + setup. Today's conviction is derived from the row we just
+  // built; prevHistory (newest-first) is the existing row's stored history.
+  const todayConv = computeConviction(partial);
+  const trend = computeTrend(daily.close, todayConv, prevHistory || []);
+
+  return {
+    ...partial,
+    sma_9: trend.sma9,
+    sma_15: trend.sma15,
+    sma_62: trend.sma62,
+    sma_200: trend.sma200,
+    setup: trend.setup,
   };
 }
 
@@ -312,14 +329,17 @@ async function upsertScores(rows) {
  * Score a list of symbols with controlled concurrency. Mirrors the pacing
  * used by ScreenerTab so we don't trip FMP rate limits.
  */
-async function scoreInBatches(symbols, listType) {
+async function scoreInBatches(symbols, listType, existing) {
   const scored = [];
   let failCount = 0;
 
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
     const batch = symbols.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
-      batch.map(sym => scoreSymbol(sym, listType))
+      batch.map(sym => {
+        const prevHistory = existing?.get(sym)?.conviction_history || [];
+        return scoreSymbol(sym, listType, prevHistory);
+      })
     );
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value) scored.push(r.value);
@@ -372,9 +392,11 @@ export default async function handler(req, res) {
     const existing = await fetchExistingScores();
 
     // Score all three lists. Tell Sheet first (smaller, and most-watched).
-    const tellResult = await scoreInBatches(lists.tellsheet, 'tellsheet');
-    const watchResult = await scoreInBatches(lists.watchlist, 'watchlist');
-    const busResult = await scoreInBatches(busOnly, 'bus_research');
+    // Pass the `existing` map so each row's prior conviction_history is
+    // available to computeTrend for accumulation/breakout detection.
+    const tellResult = await scoreInBatches(lists.tellsheet, 'tellsheet', existing);
+    const watchResult = await scoreInBatches(lists.watchlist, 'watchlist', existing);
+    const busResult = await scoreInBatches(busOnly, 'bus_research', existing);
 
     // Attach conviction_history to every newly-scored row.
     const attach = (row) => ({

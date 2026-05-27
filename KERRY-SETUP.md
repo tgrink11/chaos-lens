@@ -38,17 +38,27 @@ create table kerry_scores (
   lambda numeric,
   chaos_lens_url text,
   conviction_history jsonb not null default '[]'::jsonb,
+  sma_9 numeric,
+  sma_15 numeric,
+  sma_62 numeric,
+  sma_200 numeric,
+  setup text,
   scanned_at timestamptz not null default now()
 );
 
 create index kerry_scores_list_type_idx on kerry_scores (list_type);
 ```
 
-**If the table already exists**, add the new column in place:
+**If the table already exists**, add the new columns in place:
 
 ```sql
 alter table kerry_scores
-  add column if not exists conviction_history jsonb not null default '[]'::jsonb;
+  add column if not exists conviction_history jsonb not null default '[]'::jsonb,
+  add column if not exists sma_9 numeric,
+  add column if not exists sma_15 numeric,
+  add column if not exists sma_62 numeric,
+  add column if not exists sma_200 numeric,
+  add column if not exists setup text;
 ```
 
 `conviction_history` stores the prior N days of computed conviction scores

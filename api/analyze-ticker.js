@@ -20,6 +20,32 @@ import { runBehavioralAnalysis } from '../src/engine/behavioral.js';
 import { classifyMood } from '../src/engine/mood.js';
 import { findAnalogs } from '../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
+import { computeTrend } from '../src/engine/trend.js';
+
+// Mirrors the convictionScore() function in kerry-scores.html and the
+// computeConviction() function in kerry-scan.js. Used here so trend
+// classification can factor in today's conviction.
+function computeConviction(r) {
+  let s = 0;
+  const c15 = (r.short_term_confidence || 0) / 100;
+  if (r.short_term_direction === 'bullish') s += c15;
+  else if (r.short_term_direction === 'bearish') s -= c15;
+  const c62 = (r.medium_term_confidence || 0) / 100;
+  if (r.medium_term_direction === 'bullish') s += c62;
+  else if (r.medium_term_direction === 'bearish') s -= c62;
+  const cP = (r.prediction_confidence || 0) / 100;
+  if (r.prediction === 'THRUST_UP') s += cP;
+  else if (r.prediction === 'CASCADE_DOWN') s -= cP;
+  if (r.mood === 'EUPHORIA') s += 0.7;
+  else if (r.mood === 'STEALTH_BUILD') s += 0.5;
+  else if (r.mood === 'PANIC') s -= 0.7;
+  if (Number.isFinite(r.box_dim)) {
+    const smoothness = Math.max(0, 1.5 - r.box_dim);
+    const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
+    s += smoothness * sign * 2;
+  }
+  return Math.round(s * 100) / 100;
+}
 
 const FMP_KEY = process.env.FMP_KEY;
 const CHAOS_LENS_URL = process.env.CHAOS_LENS_URL || '';
@@ -132,7 +158,7 @@ export default async function handler(req, res) {
     : null;
 
   // Match the kerry_scores row shape exactly so the page can re-use rowHtml.
-  return res.status(200).json({
+  const partial = {
     symbol,
     list_type: 'custom',
     name: null,
@@ -151,5 +177,21 @@ export default async function handler(req, res) {
     chaos_lens_url: chaosUrl,
     conviction_history: [],
     scanned_at: new Date().toISOString(),
+  };
+
+  // Trend + setup. Custom rows have no stored history so accumulation
+  // detection runs only against today's snapshot — the BREAKOUT label
+  // (which requires a prior-day conviction) will never fire here, but
+  // ACCUMULATING / UPTREND / DOWNTREND still work fine.
+  const todayConv = computeConviction(partial);
+  const trend = computeTrend(daily.close, todayConv, []);
+
+  return res.status(200).json({
+    ...partial,
+    sma_9: trend.sma9,
+    sma_15: trend.sma15,
+    sma_62: trend.sma62,
+    sma_200: trend.sma200,
+    setup: trend.setup,
   });
 }
