@@ -14,6 +14,7 @@ import { runBehavioralAnalysis } from './engine/behavioral';
 import { classifyMood } from './engine/mood';
 import { predictBreak, predictHorizons } from './engine/prediction';
 import { findAnalogs } from './engine/analogs';
+import { computeTrend } from './engine/trend';
 import DirectionalOutlook from './components/DirectionalOutlook';
 import PrintButton from './components/PrintButton';
 import BacktestResults from './components/BacktestResults';
@@ -116,9 +117,16 @@ export default function App() {
         setBacktestLoading(false);
       });
 
-      // Step 9: Get Claude AI analysis (async, update when ready)
+      // Step 9: Compute trend + setup so the Claude prompt can reason
+      // about MA structure and the accumulation/breakout phase. No
+      // conviction history is available on the main-page flow, so the
+      // history-dependent labels (BREAKOUT, EXTENDED) won't fire — but
+      // ACCUMULATING / UPTREND / DOWNTREND / NEUTRAL still work.
+      const trendResult = computeTrend(rawData.daily.close, 0, []);
+
+      // Step 10: Get Claude AI analysis (async, update when ready)
       const analysis = await getAnalysis(
-        sym, type, fractalResults, behavioralResults, moodResult, predictionResult, analogResults
+        sym, type, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult
       );
 
       setResults(prev => ({
