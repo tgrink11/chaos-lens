@@ -212,9 +212,12 @@
                 <tbody class="divide-y divide-slate-100">
                   <tr><td class="px-3 py-2 mono">15-Day direction</td><td class="px-3 py-2">±(15d Conf ÷ 100), so up to ±0.9</td></tr>
                   <tr><td class="px-3 py-2 mono">62-Day direction</td><td class="px-3 py-2">±(62d Conf ÷ 100), so up to ±0.9</td></tr>
-                  <tr><td class="px-3 py-2 mono">Prediction</td><td class="px-3 py-2">Thrust Up: +(Pred Conf ÷ 100) · Cascade Down: −(Pred Conf ÷ 100) · Consolidation: 0</td></tr>
+                  <tr><td class="px-3 py-2 mono">Prediction</td><td class="px-3 py-2">Thrust Up: +(Pred Conf ÷ 100) · Cascade Down: −(Pred Conf ÷ 100) · Consolidation: 0 (but see CONSOLIDATION penalty below)</td></tr>
                   <tr><td class="px-3 py-2 mono">Mood</td><td class="px-3 py-2">Euphoria +0.7 · Stealth Build +0.5 · Grind 0 · Panic −0.7</td></tr>
-                  <tr><td class="px-3 py-2 mono">Box dim (D)</td><td class="px-3 py-2">Smoothness bonus amplifies the existing direction by up to ±1.0 (low D = clean line)</td></tr>
+                  <tr><td class="px-3 py-2 mono">CONSOLIDATION penalty</td><td class="px-3 py-2">If prediction is Consolidation AND the other signals are leaning directional (|s| &gt; 1.0), subtract 0.3 toward neutral. The engine is literally saying "no breakout."</td></tr>
+                  <tr><td class="px-3 py-2 mono">Horizon disagreement</td><td class="px-3 py-2">If 15-day and 62-day point opposite directions, multiply the running score by 0.7 — the model is split, conviction shouldn't read high.</td></tr>
+                  <tr><td class="px-3 py-2 mono">Hurst quality</td><td class="px-3 py-2">H &gt; 0.6 with directional signals: +0.3 (genuinely persistent trend). H ≈ 0.5 with strong signals: −0.3 (random-walk territory, direction isn't structurally supported).</td></tr>
+                  <tr><td class="px-3 py-2 mono">Box dim (D)</td><td class="px-3 py-2">Smoothness × tanh(s) × 2 — continuous amplification through zero. Up to ±1.0 for clean paths (D ≈ 1.0).</td></tr>
                 </tbody>
               </table>
             </div>
@@ -443,17 +446,13 @@
       /**
        * Composite conviction score (-5.4 … +5.4 in practice).
        *
-       * Rewards alignment across the five signals called out in the
-       * explanation panel: 15-day direction, 62-day direction, the
-       * next-break prediction, the mood label, and the smoothness of
-       * the price path (low box dimension D).
+       * IMPORTANT: This function is duplicated from src/engine/conviction.js
+       * because the kerry-scores.html static page has no module loader. If
+       * you change either file, change BOTH to keep client and server in
+       * sync. The three server-side endpoints (kerry-scan, ai-take,
+       * analyze-ticker) all import from the canonical module.
        *
-       * Direction signals are weighted by their own confidence so a
-       * 90%-confident bullish signal counts more than a 55%-confident
-       * one. Mood adds a flat boost in its native direction. Low D
-       * amplifies whichever direction the rest of the signals point —
-       * a smooth path makes a strong setup stronger and a chaotic
-       * path muddies an already-mixed picture.
+       * See src/engine/conviction.js for the full rationale on each factor.
        */
       function convictionScore(r) {
         let s = 0;
@@ -469,12 +468,35 @@
         if (r.mood === 'EUPHORIA') s += 0.7;
         else if (r.mood === 'STEALTH_BUILD') s += 0.5;
         else if (r.mood === 'PANIC') s -= 0.7;
-        // Box dimension amplifies direction. D close to 1 = clean line.
+
+        // FIX B — CONSOLIDATION penalty
+        if (r.prediction === 'CONSOLIDATION' && Math.abs(s) > 1.0) {
+          s -= Math.sign(s) * 0.3;
+        }
+
+        // FIX C — Horizon-disagreement penalty
+        const dir15 = r.short_term_direction;
+        const dir62 = r.medium_term_direction;
+        if ((dir15 === 'bullish' && dir62 === 'bearish') ||
+            (dir15 === 'bearish' && dir62 === 'bullish')) {
+          s *= 0.7;
+        }
+
+        // FIX D — Hurst quality factor
+        if (Number.isFinite(r.hurst)) {
+          if (r.hurst > 0.6 && Math.abs(s) > 0.5) {
+            s += Math.sign(s) * 0.3;
+          } else if (r.hurst >= 0.45 && r.hurst <= 0.55 && Math.abs(s) > 1.0) {
+            s -= Math.sign(s) * 0.3;
+          }
+        }
+
+        // FIX A — Smoothness bonus with tanh continuous scaling
         if (Number.isFinite(r.box_dim)) {
           const smoothness = Math.max(0, 1.5 - r.box_dim); // 0 (chop) → 0.5 (clean)
-          const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
-          s += smoothness * sign * 2; // up to ±1.0
+          s += smoothness * Math.tanh(s) * 2;
         }
+
         return Math.round(s * 100) / 100;
       }
 

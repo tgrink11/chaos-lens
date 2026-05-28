@@ -15,6 +15,7 @@ import { classifyMood } from '../../src/engine/mood.js';
 import { findAnalogs } from '../../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../../src/engine/prediction.js';
 import { computeTrend } from '../../src/engine/trend.js';
+import { computeConviction } from '../../src/engine/conviction.js';
 
 const SHEET_ID = process.env.KERRY_SHEET_ID;
 const SHEET_GID = process.env.KERRY_SHEET_GID || '0';
@@ -46,34 +47,6 @@ const BATCH_DELAY_MS = 250;
 // UI; storing 5 means tomorrow's scan can prepend today's value and drop the
 // oldest without losing anything the UI displays today.
 const CONVICTION_HISTORY_DEPTH = 5;
-
-/**
- * Composite conviction score (-5.4 … +5.4 in practice). Mirrors the
- * convictionScore() function in public/kerry-scores.html — if you change one,
- * change the other. We compute it server-side so we can persist historical
- * values without having to also persist every input field for every prior day.
- */
-function computeConviction(r) {
-  let s = 0;
-  const c15 = (r.short_term_confidence || 0) / 100;
-  if (r.short_term_direction === 'bullish') s += c15;
-  else if (r.short_term_direction === 'bearish') s -= c15;
-  const c62 = (r.medium_term_confidence || 0) / 100;
-  if (r.medium_term_direction === 'bullish') s += c62;
-  else if (r.medium_term_direction === 'bearish') s -= c62;
-  const cP = (r.prediction_confidence || 0) / 100;
-  if (r.prediction === 'THRUST_UP') s += cP;
-  else if (r.prediction === 'CASCADE_DOWN') s -= cP;
-  if (r.mood === 'EUPHORIA') s += 0.7;
-  else if (r.mood === 'STEALTH_BUILD') s += 0.5;
-  else if (r.mood === 'PANIC') s -= 0.7;
-  if (Number.isFinite(r.box_dim)) {
-    const smoothness = Math.max(0, 1.5 - r.box_dim);
-    const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
-    s += smoothness * sign * 2;
-  }
-  return Math.round(s * 100) / 100;
-}
 
 /**
  * Fetch a column range from the sheet via Google's gviz endpoint, which

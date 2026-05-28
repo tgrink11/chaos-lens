@@ -21,31 +21,7 @@ import { classifyMood } from '../src/engine/mood.js';
 import { findAnalogs } from '../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
 import { computeTrend } from '../src/engine/trend.js';
-
-// Mirrors the convictionScore() function in kerry-scores.html and the
-// computeConviction() function in kerry-scan.js. Used here so trend
-// classification can factor in today's conviction.
-function computeConviction(r) {
-  let s = 0;
-  const c15 = (r.short_term_confidence || 0) / 100;
-  if (r.short_term_direction === 'bullish') s += c15;
-  else if (r.short_term_direction === 'bearish') s -= c15;
-  const c62 = (r.medium_term_confidence || 0) / 100;
-  if (r.medium_term_direction === 'bullish') s += c62;
-  else if (r.medium_term_direction === 'bearish') s -= c62;
-  const cP = (r.prediction_confidence || 0) / 100;
-  if (r.prediction === 'THRUST_UP') s += cP;
-  else if (r.prediction === 'CASCADE_DOWN') s -= cP;
-  if (r.mood === 'EUPHORIA') s += 0.7;
-  else if (r.mood === 'STEALTH_BUILD') s += 0.5;
-  else if (r.mood === 'PANIC') s -= 0.7;
-  if (Number.isFinite(r.box_dim)) {
-    const smoothness = Math.max(0, 1.5 - r.box_dim);
-    const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
-    s += smoothness * sign * 2;
-  }
-  return Math.round(s * 100) / 100;
-}
+import { computeConviction } from '../src/engine/conviction.js';
 
 const FMP_KEY = process.env.FMP_KEY;
 const CHAOS_LENS_URL = process.env.CHAOS_LENS_URL || '';

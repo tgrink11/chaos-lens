@@ -26,32 +26,8 @@ import { classifyMood } from '../src/engine/mood.js';
 import { findAnalogs } from '../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
 import { computeTrend } from '../src/engine/trend.js';
+import { computeConviction } from '../src/engine/conviction.js';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/api/claude.js';
-
-// Mirrors the convictionScore() in kerry-scores.html and the
-// computeConviction() in kerry-scan.js. Needed here so we can pass the
-// AI's prompt builder a meaningful SETUP PHASE label.
-function computeConvictionForRow(r) {
-  let s = 0;
-  const c15 = (r.short_term_confidence || 0) / 100;
-  if (r.short_term_direction === 'bullish') s += c15;
-  else if (r.short_term_direction === 'bearish') s -= c15;
-  const c62 = (r.medium_term_confidence || 0) / 100;
-  if (r.medium_term_direction === 'bullish') s += c62;
-  else if (r.medium_term_direction === 'bearish') s -= c62;
-  const cP = (r.prediction_confidence || 0) / 100;
-  if (r.prediction === 'THRUST_UP') s += cP;
-  else if (r.prediction === 'CASCADE_DOWN') s -= cP;
-  if (r.mood === 'EUPHORIA') s += 0.7;
-  else if (r.mood === 'STEALTH_BUILD') s += 0.5;
-  else if (r.mood === 'PANIC') s -= 0.7;
-  if (Number.isFinite(r.box_dim)) {
-    const smoothness = Math.max(0, 1.5 - r.box_dim);
-    const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
-    s += smoothness * sign * 2;
-  }
-  return Math.round(s * 100) / 100;
-}
 
 const FMP_KEY = process.env.FMP_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -222,9 +198,10 @@ export default async function handler(req, res) {
     prediction: predictionResult.prediction.key,
     prediction_confidence: predictionResult.confidence,
     mood: moodResult.mood.key,
+    hurst: fractalResults.primary.hurst.H,
     box_dim: fractalResults.primary.boxDim.D,
   };
-  const todayConv = computeConvictionForRow(todayConvictionInput);
+  const todayConv = computeConviction(todayConvictionInput);
 
   // Pull existing conviction_history from Supabase if this symbol is on
   // the Kerry list so BREAKOUT/EXTENDED can fire. Non-Kerry symbols just
