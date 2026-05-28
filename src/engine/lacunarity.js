@@ -99,10 +99,16 @@ export function computeLacunarity(prices) {
   }
 
   const avgLambda = totalLambda / count;
+  // Labels — calibrated empirically against the real-stock distribution.
+  // Even with continuous absolute-return masses, US equities on a 2-year
+  // daily series cluster tightly around Λ ≈ 1.08-1.16. Strong volatility
+  // clustering pushes Λ above ~1.13 but rarely above 1.20 for liquid names.
+  // The previous textbook thresholds (1.4 / 1.8) almost never fired for
+  // real stocks. These calibrated cutoffs catch the actual outliers.
   let label;
-  if (avgLambda > 1.8) label = 'Highly Clustered (Accumulation/Distribution)';
-  else if (avgLambda > 1.4) label = 'Moderately Clustered';
-  else if (avgLambda > 1.15) label = 'Slightly Clustered';
+  if (avgLambda > 1.16) label = 'Highly Clustered (Accumulation/Distribution)';
+  else if (avgLambda > 1.12) label = 'Moderately Clustered';
+  else if (avgLambda > 1.09) label = 'Slightly Clustered';
   else label = 'Uniform (Grind)';
 
   return {

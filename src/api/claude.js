@@ -33,9 +33,37 @@ The 10th Man section is not optional. Skip it and the analysis is
 incomplete.`;
 
 /**
+ * Format peer-context block showing where this stock's fractal metrics
+ * rank within the full population of scored tickers. Real US equities
+ * cluster in a narrow band (H ≈ 0.49-0.65, D ≈ 1.0-1.2, Λ ≈ 1.08-1.16)
+ * so raw values don't tell Claude much — but a 90th-percentile H IS
+ * meaningfully different from a 50th-percentile H.
+ *
+ * `primary` is fractalResults.primary, `stats` is { hurst, box_dim,
+ * lambda } each with { median, p10, p25, p75, p90, percentile }.
+ */
+function formatPopulationContext(primary, stats) {
+  if (!stats) return '';
+  const fmt = (v, p) => {
+    if (!Number.isFinite(v)) return '—';
+    if (!stats[p]) return v.toFixed(3);
+    const s = stats[p];
+    const pct = s.percentile;
+    const place = pct >= 90 ? `top ${100 - pct}%`
+      : pct <= 10 ? `bottom ${pct}%`
+      : `${pct}th percentile`;
+    return `${v.toFixed(3)} — ${place} of scan (population median ${s.median?.toFixed(3) ?? '—'}, range ${s.p10?.toFixed(3) ?? '—'}–${s.p90?.toFixed(3) ?? '—'})`;
+  };
+  return `\nPEER CONTEXT (within today's Kerry-list scan):
+- Hurst:  ${fmt(primary.hurst.H, 'hurst')}
+- BoxDim: ${fmt(primary.boxDim.D, 'box_dim')}
+- Lacuna: ${fmt(primary.lacunarity.lambda, 'lambda')}`;
+}
+
+/**
  * Build the analysis prompt from computed metrics
  */
-export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult) {
+export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats) {
   const p = fractalResults?.primary;
   if (!p) return `Analyze ${symbol} — insufficient data for fractal analysis.`;
 
@@ -61,7 +89,7 @@ FRACTAL METRICS BY TIMEFRAME:
 ${timeframes.join('\n')}
 
 ${selfSim ? `SELF-SIMILARITY: Score=${selfSim.score.toFixed(2)} — ${selfSim.label} (Hurst spread: ${selfSim.hurstSpread}, Dim spread: ${selfSim.dimSpread})` : ''}
-
+${populationStats ? formatPopulationContext(p, populationStats) : ''}
 BEHAVIORAL SIGNALS:
 - Greed: ${behavioralResults.greed.score}/100 — ${behavioralResults.greed.intensity}
 - Fear: ${behavioralResults.fear.score}/100 — ${behavioralResults.fear.intensity}

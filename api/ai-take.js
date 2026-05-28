@@ -99,6 +99,56 @@ async function callClaude(prompt, host) {
   return resp.json();
 }
 
+/**
+ * Pull H, D, Λ values across the entire kerry_scores table and compute
+ * percentile context for the symbol currently being analyzed. Lets the
+ * AI prompt say "this stock is at the 90th percentile for Hurst across
+ * today's scan" rather than just "Hurst=0.56."
+ *
+ * Returns null gracefully if Supabase is empty or the fetch fails —
+ * the prompt builder handles the missing-context case.
+ */
+async function fetchPopulationStats(thisH, thisD, thisL) {
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/kerry_scores?select=hurst,box_dim,lambda`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!resp.ok) return null;
+    const rows = await resp.json().catch(() => []);
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const statsFor = (field, thisValue) => {
+      const arr = rows.map(r => r[field]).filter(v => Number.isFinite(v)).sort((a, b) => a - b);
+      if (arr.length === 0) return null;
+      const at = (q) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(q * (arr.length - 1))))];
+      let lower = 0, equal = 0;
+      for (const v of arr) {
+        if (v < thisValue) lower++;
+        else if (v === thisValue) equal++;
+        else break;
+      }
+      const percentile = Math.round(((lower + 0.5 * equal) / arr.length) * 100);
+      return {
+        median: at(0.5),
+        p10: at(0.10),
+        p25: at(0.25),
+        p75: at(0.75),
+        p90: at(0.90),
+        percentile,
+      };
+    };
+
+    return {
+      hurst: statsFor('hurst', thisH),
+      box_dim: statsFor('box_dim', thisD),
+      lambda: statsFor('lambda', thisL),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function readCache(symbol) {
   const resp = await fetch(
     `${SUPABASE_URL}/rest/v1/ai_takes?symbol=eq.${symbol}&select=*&limit=1`,
@@ -222,8 +272,17 @@ export default async function handler(req, res) {
 
   const trendResult = computeTrend(daily.close, todayConv, prevHistory);
 
+  // Population context: pull H/D/Λ across the current Kerry scan so the
+  // AI sees where this stock ranks against its peers, not just the
+  // absolute fractal values (which cluster tightly across US equities).
+  const populationStats = await fetchPopulationStats(
+    fractalResults.primary.hurst.H,
+    fractalResults.primary.boxDim.D,
+    fractalResults.primary.lacunarity.lambda
+  );
+
   const prompt = buildPrompt(
-    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult
+    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats
   );
 
   let claudeResp;

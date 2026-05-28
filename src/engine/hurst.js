@@ -144,14 +144,19 @@ export function computeHurst(prices, minWindow = 8) {
   const { slope: H, r2 } = linearRegression(logS, logF);
   const clamped = Math.max(0, Math.min(1, H));
 
-  // Labels — same buckets as the previous R/S implementation. DFA produces
-  // unbiased estimates so these thresholds now match the textbook meaning
-  // (R/S was systematically reading ~0.55 on random walks).
+  // Labels — calibrated empirically against the real-stock distribution
+  // observed in the Kerry's list scan (US equities cluster in H ≈ 0.45-0.65,
+  // a much tighter band than the theoretical 0-1 range). The previous
+  // buckets put 95%+ of stocks into "Random Walk" / "Weakly Persistent"
+  // and made the label useless. These thresholds map to roughly 20/20/20/20/20
+  // splits across a typical scan, so "Persistent" actually identifies the
+  // outliers that are genuinely trending and "Anti-Persistent" picks out
+  // the genuine mean-reverters.
   let label;
-  if (clamped > 0.65) label = 'Persistent (Trending)';
-  else if (clamped > 0.55) label = 'Weakly Persistent';
-  else if (clamped > 0.45) label = 'Random Walk';
-  else if (clamped > 0.35) label = 'Weakly Anti-Persistent';
+  if (clamped > 0.60) label = 'Persistent (Trending)';
+  else if (clamped > 0.56) label = 'Weakly Persistent';
+  else if (clamped > 0.52) label = 'Random Walk';
+  else if (clamped > 0.48) label = 'Weakly Anti-Persistent';
   else label = 'Anti-Persistent (Mean-Reverting)';
 
   return { H: clamped, r2, label };

@@ -511,6 +511,53 @@
         return (v >= 0 ? '+' : '') + v.toFixed(2);
       }
 
+      // Population percentiles. Real US equities cluster in a narrow
+      // fractal band (H ≈ 0.49-0.65, D ≈ 1.0-1.2, Λ ≈ 1.08-1.16) so a
+      // raw value of 0.56 means very different things depending on the
+      // population — sometimes it's the 50th percentile, sometimes the
+      // 70th. We attach the percentile to each row so the UI can show
+      // "0.649 (top 5%)" instead of just "0.649," and so users can see
+      // at a glance which stocks are real outliers.
+      function attachPercentiles(rows) {
+        const fields = ['hurst', 'box_dim', 'lambda'];
+        for (const f of fields) {
+          const sorted = rows
+            .map(r => r[f])
+            .filter(v => Number.isFinite(v))
+            .sort((a, b) => a - b);
+          const N = sorted.length;
+          if (N === 0) continue;
+          const pctKey = '_pct_' + f;
+          for (const r of rows) {
+            const v = r[f];
+            if (!Number.isFinite(v)) { r[pctKey] = null; continue; }
+            // Average-rank percentile (handles ties).
+            let lower = 0, equal = 0;
+            for (const s of sorted) {
+              if (s < v) lower++;
+              else if (s === v) equal++;
+              else break;
+            }
+            r[pctKey] = Math.round(((lower + 0.5 * equal) / N) * 100);
+          }
+        }
+      }
+
+      // Render a small percentile suffix below the raw value. Top 10% and
+      // bottom 10% get colored to flag outliers; the middle 80% renders
+      // muted slate so it doesn't dominate the cell.
+      function pctBadge(pct) {
+        if (pct == null) return '';
+        let cls = 'text-slate-400';
+        let label;
+        if (pct >= 90) { cls = 'text-emerald-700 font-medium'; label = `top ${100 - pct}%`; }
+        else if (pct >= 75) { cls = 'text-emerald-600'; label = `${pct}th`; }
+        else if (pct <= 10) { cls = 'text-red-700 font-medium'; label = `bot ${pct}%`; }
+        else if (pct <= 25) { cls = 'text-red-600'; label = `${pct}th`; }
+        else { label = `${pct}th`; }
+        return `<div class="text-[10px] ${cls} leading-tight">${label}</div>`;
+      }
+
       // Renders the prior-5-days mini-row that sits under today's conviction.
       // Each value is color-coded with the same green/red thresholds used for
       // the main number, but with smaller, dimmer styling so it doesn't compete
@@ -639,9 +686,9 @@
             <td class="px-2 py-2 text-center">${trendCellHtml(r)}</td>
             <td class="px-2 py-2">${setupBadgeHtml(r.setup)}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.lambda)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
+            <td class="px-2 py-2 text-right mono num">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
             <td class="px-2 py-2 text-center text-xs">${aiTakeCell}</td>
           </tr>
         `;
@@ -1029,6 +1076,7 @@
             ...r,
             _conviction: convictionScore(r),
           }));
+          attachPercentiles(allScores);
           els.lastScanned.textContent = data.lastScanned
             ? new Date(data.lastScanned).toLocaleString()
             : '—';
