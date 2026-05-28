@@ -80,18 +80,24 @@
             </p>
             <ul class="space-y-2 ml-1">
               <li><span class="mono font-semibold text-slate-900">Hurst (H)</span> — persistence.
-                H&nbsp;>&nbsp;0.55 means the price is trending (moves in the same direction longer than chance).
-                H&nbsp;≈&nbsp;0.5 is a random walk (no edge). H&nbsp;<&nbsp;0.45 is mean-reverting (every move
-                tends to reverse). Note: H measures persistence, <em>not</em> bullish/bearish — a strong downtrend
-                has high H too.</li>
-              <li><span class="mono font-semibold text-slate-900">Box dimension (D)</span> — smoothness.
-                D&nbsp;close to 1 is a clean line (steady trend). D&nbsp;near 1.5 is typical market chop.
-                D&nbsp;near 2 is space-filling chaos (frantic noise). Low D plus a recent up-move suggests a
-                breakout is building; high D suggests the structure is breaking down.</li>
-              <li><span class="mono font-semibold text-slate-900">Lacunarity (Λ)</span> — gap distribution.
-                Λ&nbsp;>&nbsp;1.4 means buying or selling is clustered into pockets (accumulation/distribution).
-                Λ&nbsp;close to 1 means uniform grinding with no concentration. High Λ often precedes
-                directional moves once the clusters resolve.</li>
+                Computed via <em>Detrended Fluctuation Analysis (DFA)</em>, which is the literature-standard fix
+                for small-sample bias on ~700-bar daily series (the previous Rescaled-Range implementation drifted
+                toward H ≈ 0.55 for every stock regardless of actual behavior). Now: H&nbsp;>&nbsp;0.55 means
+                trending (moves persist), H&nbsp;≈&nbsp;0.5 is a random walk (no edge), H&nbsp;<&nbsp;0.45 is
+                mean-reverting (every move tends to reverse). H measures persistence, not direction — a strong
+                downtrend has high H too.</li>
+              <li><span class="mono font-semibold text-slate-900">Box dimension (D)</span> — path complexity.
+                Computed via <em>Higuchi fractal dimension</em>, which operates directly on the sequential price
+                series with no 2D gridding (the previous box-counting code undersampled line segments between
+                consecutive bars and biased D downward). Now: D&nbsp;close to 1 is a clean line (steady trend),
+                D&nbsp;near 1.5 is typical market chop, D&nbsp;near 2 is space-filling chaos (frantic noise).</li>
+              <li><span class="mono font-semibold text-slate-900">Lacunarity (Λ)</span> — volatility clustering.
+                Computed via gliding-box on <em>absolute log returns</em> (not binary up/down day flags — the
+                previous binary thresholding washed out the actual clustering signal so every stock read
+                Λ ≈ 1.05). Now: Λ&nbsp;>&nbsp;1.4 means volatility is clustered into pockets — quiet
+                accumulation followed by bursts, or steady move followed by news shocks. Λ&nbsp;close to 1 means
+                uniform volatility (no concentration). High Λ often precedes directional moves once the
+                clusters resolve.</li>
             </ul>
           </section>
 
