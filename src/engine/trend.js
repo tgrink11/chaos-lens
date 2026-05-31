@@ -45,11 +45,16 @@ function round2(v) {
  * }}
  */
 export function computeTrend(close, currentConviction, prevHistory) {
-  if (!Array.isArray(close) || close.length < 9) {
+  if (!Array.isArray(close) || close.length < 15) {
     return { sma9: null, sma15: null, sma62: null, sma200: null, setup: null };
   }
 
-  const sma9 = sma(close, 9);
+  // sma9 deliberately dropped from the trend ladder. The 9-day was too
+  // noisy to carry signal — 62-day is the make-or-break trend line and
+  // 200-day is the line of last resort. We keep computing sma15 for
+  // internal use only (the ACCUMULATING setup detector needs a slope
+  // sample shorter than 62d), but it's no longer displayed.
+  const sma9 = null;
   const sma15 = sma(close, 15);
   const sma62 = sma(close, 62);
   const sma200 = sma(close, 200);

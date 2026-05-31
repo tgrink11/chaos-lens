@@ -140,10 +140,10 @@
                 answers "do I want this direction"; the new <span class="mono">Rating</span> column synthesizes
                 it with the Risk Range to answer "buy now, hold, or trim?"</div>
               <div><span class="mono font-semibold text-slate-900">Rating</span> — Synthesis of Conviction
-                (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d):
+                (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d) + Fractal
+                confirmation (Hurst persistent, Box dim smooth, Λ uniform):
                 <strong>BUY</strong> (bold green) = bullish conviction AND price in bottom 25% of band AND
-                no trend break (gates pass when SMAs are unknown — newly-listed names with strong conviction
-                can still BUY).
+                above 62d & 200d AND fractals confirm a real trend (not random walk).
                 <strong>ADD</strong> = bullish + price in lower 40% + above 62d (or unknown).
                 <strong class="text-sky-700">DIP</strong> (light blue) = price in bottom 25% + above 200d
                 (or unknown) + mid-conviction (C between -0.5 and +1.0). Stocks pulling back into the buy
@@ -162,11 +162,14 @@
                 by position-in-band — lowest values are the best entries. This is our approximation of
                 Hedgeye's Risk Range methodology using only OHLCV we already pull; it is not their closed
                 formula.</div>
-              <div><span class="mono font-semibold text-slate-900">Trend</span> — Four small pills show whether
-                today's price sits above (green ▲) or below (red ▼) the 9, 15, 62, and 200-day simple moving
-                averages. Hover any pill for the actual MA value and the price's % gap to it. A green-green-
-                green-green stack is a clean uptrend; mixed colors mean the trend is transitioning. The 9 vs 15
-                relationship is the most short-term signal; 62 vs 200 is the long-term backdrop.</div>
+              <div><span class="mono font-semibold text-slate-900">Trend</span> — Three pills show whether price
+                sits above (green ▲) or below (red ▼) the 15, 62, and 200-day simple moving averages.
+                <strong>62-day is make-or-break</strong> — above it means the medium-term trend is intact.
+                <strong>200-day is the line of last resort</strong> — nothing good happens below it (BUY ratings
+                require price above 200d; a break triggers an automatic SELL via the TAIL gate). The 9-day was
+                removed from the engine — too noisy to carry signal at this timescale. "Real trend" in the
+                rating logic = price above 62d AND the fractal signature confirms (Hurst persistent, Box dim
+                smooth, Λ uniform).</div>
               <div><span class="mono font-semibold text-slate-900">Setup</span> — The phase of the trend cycle:
                 <strong>Accum</strong> (blue) flags the quiet build-up phase — short-term MAs turning up,
                 conviction rising but not yet spiking. <strong>Breakout</strong> (bold green) flags the day
@@ -650,8 +653,11 @@
       // than just a binary up/down.
       function trendCellHtml(r) {
         const price = r.price;
+        // 9-day SMA dropped — too noisy to carry signal. The 62-day is
+        // the make-or-break trend line, the 200-day is the line of last
+        // resort. 15-day kept as a near-term reference but in a smaller
+        // role visually (uncolored pills sit before the meaningful ones).
         const mas = [
-          { label: '9', val: r.sma_9 },
           { label: '15', val: r.sma_15 },
           { label: '62', val: r.sma_62 },
           { label: '200', val: r.sma_200 },
