@@ -28,81 +28,12 @@ import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
 import { computeTrend } from '../src/engine/trend.js';
 import { computeConviction } from '../src/engine/conviction.js';
 import { computeRiskRange } from '../src/engine/riskRange.js';
+// Rating logic lives in /public/rating-logic.js — same physical file the
+// browser imports from kerry-scores.html. Vercel's bundler walks the
+// relative import and includes it in the function bundle. Single source
+// of truth across client + server.
+import { computeRating } from '../public/rating-logic.js';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/api/claude.js';
-
-// Mirrors the computeRating function in public/kerry-scores.html. Kept in
-// sync manually because the HTML can't import server modules. If you
-// change one, change both.
-const RATING_CONFIG_SERVER = {
-  CONVICTION_GATE: 1.0,
-  CONVICTION_DIP_LO: -0.5,
-  CONVICTION_DIP_HI: 1.0,
-  RANGE_BUY: 0.25,
-  RANGE_ADD: 0.40,
-  RANGE_SELL: 0.60,
-  RANGE_TRIM: 0.75,
-  VOL_LOW: 0.8,
-  VOL_HIGH: 1.2,
-  VOLUME_CONFIRMED_TRIM_OVERRIDE: true,
-};
-
-// Tri-state gate booleans. null = "no data, don't veto" — newly-listed
-// names without 200 bars of history can still rate when conviction +
-// range_pos warrant.
-function notFailing(v) { return v !== false; }
-
-function computeRatingServer(C, price, sma62, sma200, rangePos, volRatio) {
-  const hasTail  = Number.isFinite(price) && Number.isFinite(sma200);
-  const hasTrend = Number.isFinite(price) && Number.isFinite(sma62);
-  const tailBreak = hasTail && price < sma200;
-  const aboveTail  = hasTail ? price > sma200 : null;
-  const aboveTrend = hasTrend ? price > sma62 : null;
-
-  if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
-
-  if (Number.isFinite(C) && C < -RATING_CONFIG_SERVER.CONVICTION_GATE) {
-    if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
-    if (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL || aboveTrend === false) {
-      return { rating: 'SELL', reason: 'Bearish C + ' + (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL ? 'top half of band' : 'below 62d trend') };
-    }
-    return { rating: 'HOLD', reason: 'Bearish but mid-band' };
-  }
-  if (Number.isFinite(C) && C > RATING_CONFIG_SERVER.CONVICTION_GATE) {
-    if (rangePos == null) return { rating: 'HOLD', reason: 'Bullish but no range data (never BUY without range)' };
-    if (rangePos >= RATING_CONFIG_SERVER.RANGE_TRIM) {
-      if (RATING_CONFIG_SERVER.VOLUME_CONFIRMED_TRIM_OVERRIDE
-          && Number.isFinite(volRatio) && volRatio > RATING_CONFIG_SERVER.VOL_HIGH) {
-        return { rating: 'HOLD', reason: 'Top of band but volume confirms' };
-      }
-      return { rating: 'TRIM', reason: 'Top of band' };
-    }
-    if (rangePos <= RATING_CONFIG_SERVER.RANGE_BUY && notFailing(aboveTrend) && notFailing(aboveTail)) {
-      const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
-      return thin
-        ? { rating: 'ADD', reason: 'Buy zone but thin volume' }
-        : { rating: 'BUY', reason: 'Bottom of band, no trend break' };
-    }
-    if (rangePos <= RATING_CONFIG_SERVER.RANGE_ADD && notFailing(aboveTrend)) {
-      const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
-      return thin
-        ? { rating: 'HOLD', reason: 'Add zone but thin volume' }
-        : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
-    }
-    if (notFailing(aboveTrend)) return { rating: 'HOLD', reason: "Bullish but mid-band — own, don't chase" };
-  }
-
-  // DIP: range_pos low + above tail (or no tail data) + mid-conviction.
-  // Flags pullbacks-in-uptrend that the strict BUY gate misses.
-  if (rangePos != null
-      && rangePos <= RATING_CONFIG_SERVER.RANGE_BUY
-      && notFailing(aboveTail)
-      && Number.isFinite(C)
-      && C >= RATING_CONFIG_SERVER.CONVICTION_DIP_LO
-      && C <= RATING_CONFIG_SERVER.CONVICTION_DIP_HI) {
-    return { rating: 'DIP', reason: 'In buy zone, mid-conviction — watch for momentum to turn' };
-  }
-  return { rating: 'HOLD', reason: 'No edge' };
-}
 
 const FMP_KEY = process.env.FMP_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -358,16 +289,16 @@ export default async function handler(req, res) {
 
   // Risk Range + Rating. Lets the AI prompt explicitly address entry
   // timing (where price sits in the LRR..TRR band, is volume confirming)
-  // and the synthesized BUY/ADD/HOLD/TRIM/SELL call.
+  // and the synthesized BUY/ADD/HOLD/TRIM/SELL/DIP call.
   const riskRange = computeRiskRange(daily, fractalResults.primary.lacunarity.lambda);
-  const rating = computeRatingServer(
-    todayConv,
-    daily.close[daily.close.length - 1],
-    trendResult?.sma62,
-    trendResult?.sma200,
-    riskRange?.range_pos,
-    riskRange?.vol_ratio
-  );
+  const rating = computeRating({
+    _conviction: todayConv,
+    price: daily.close[daily.close.length - 1],
+    sma_62: trendResult?.sma62,
+    sma_200: trendResult?.sma200,
+    range_pos: riskRange?.range_pos,
+    vol_ratio: riskRange?.vol_ratio,
+  });
 
   const prompt = buildPrompt(
     symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating
