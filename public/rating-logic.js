@@ -25,6 +25,12 @@ export const RATING_CONFIG = {
   CONVICTION_GATE: 1.0,    // |C| must exceed this to leave HOLD/DIP
   CONVICTION_DIP_LO: -0.5, // DIP fires when C is in this range AND
   CONVICTION_DIP_HI: 1.0,  //   range_pos ≤ RANGE_BUY AND above tail.
+  CONVICTION_BUY_NO_RANGE: 2.5, // When range data is missing (newly-listed
+                                // names with insufficient history), allow
+                                // BUY only when conviction CLEARLY exceeds
+                                // this higher bar AND no tail break has
+                                // fired. Trade-off: buying on direction
+                                // alone, no entry-timing verification.
   RANGE_BUY:   0.25,       // range_pos ≤ this counts as bottom of band
   RANGE_ADD:   0.40,       // ≤ this counts as lower-half
   RANGE_SELL:  0.60,       // ≥ this for bearish-conviction SELL
@@ -102,11 +108,28 @@ export function computeRating(r) {
 
   // 3. Bullish conviction branches.
   if (Number.isFinite(C) && C > RATING_CONFIG.CONVICTION_GATE) {
-    if (rangePos == null) return {
-      rating: 'HOLD',
-      reason: 'Bullish conviction (no range data — never BUY without range)',
-      subscriberReason: 'Bullish signals are strong but the stock is too new to verify a good entry price — hold or watch.',
-    };
+    if (rangePos == null) {
+      // High-conviction override: when range data is missing but
+      // conviction CLEARLY exceeds the higher bar (typically newly-
+      // listed names with insufficient history for a Risk Range), allow
+      // BUY rather than defaulting to HOLD. Tail break was already
+      // ruled out at step 1, so we know either sma_200 is null OR
+      // price > sma_200. The trade-off — buying on direction alone
+      // without an entry-timing verification — is surfaced explicitly
+      // in the reason text so the user sees the caveat.
+      if (C > RATING_CONFIG.CONVICTION_BUY_NO_RANGE) {
+        return {
+          rating: 'BUY',
+          reason: `Strong bullish conviction (C=${C.toFixed(2)}); no range data — entry timing not verified`,
+          subscriberReason: 'Strong bullish signals across the board. This name is too new to verify a textbook entry price — BUY with the caveat that entry timing isn\'t verified by the volatility band.',
+        };
+      }
+      return {
+        rating: 'HOLD',
+        reason: 'Bullish conviction (no range data — never BUY without range)',
+        subscriberReason: 'Bullish signals are present but the stock is too new to verify a good entry price — hold or watch.',
+      };
+    }
 
     // Top of band → TRIM, unless volume confirms.
     if (rangePos >= RATING_CONFIG.RANGE_TRIM) {
