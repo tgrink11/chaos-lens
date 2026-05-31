@@ -27,7 +27,60 @@ import { findAnalogs } from '../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
 import { computeTrend } from '../src/engine/trend.js';
 import { computeConviction } from '../src/engine/conviction.js';
+import { computeRiskRange } from '../src/engine/riskRange.js';
 import { buildPrompt, SYSTEM_PROMPT } from '../src/api/claude.js';
+
+// Mirrors the computeRating function in public/kerry-scores.html. Kept in
+// sync manually because the HTML can't import server modules. If you
+// change one, change both.
+const RATING_CONFIG_SERVER = {
+  CONVICTION_GATE: 1.0,
+  RANGE_BUY: 0.25,
+  RANGE_ADD: 0.40,
+  RANGE_SELL: 0.60,
+  RANGE_TRIM: 0.75,
+  VOL_LOW: 0.8,
+  VOL_HIGH: 1.2,
+  VOLUME_CONFIRMED_TRIM_OVERRIDE: true,
+};
+
+function computeRatingServer(C, price, sma62, sma200, rangePos, volRatio) {
+  const tailBreak = Number.isFinite(price) && Number.isFinite(sma200) && price < sma200;
+  if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
+  const aboveTrend = Number.isFinite(price) && Number.isFinite(sma62) && price > sma62;
+  const aboveTail = Number.isFinite(price) && Number.isFinite(sma200) && price > sma200;
+  if (Number.isFinite(C) && C < -RATING_CONFIG_SERVER.CONVICTION_GATE) {
+    if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
+    if (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL || !aboveTrend) {
+      return { rating: 'SELL', reason: 'Bearish C + ' + (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL ? 'top half of band' : 'below 62d trend') };
+    }
+    return { rating: 'HOLD', reason: 'Bearish but mid-band' };
+  }
+  if (Number.isFinite(C) && C > RATING_CONFIG_SERVER.CONVICTION_GATE) {
+    if (rangePos == null) return { rating: 'HOLD', reason: 'Bullish but no range data (never BUY without range)' };
+    if (rangePos >= RATING_CONFIG_SERVER.RANGE_TRIM) {
+      if (RATING_CONFIG_SERVER.VOLUME_CONFIRMED_TRIM_OVERRIDE
+          && Number.isFinite(volRatio) && volRatio > RATING_CONFIG_SERVER.VOL_HIGH) {
+        return { rating: 'HOLD', reason: 'Top of band but volume confirms' };
+      }
+      return { rating: 'TRIM', reason: 'Top of band' };
+    }
+    if (rangePos <= RATING_CONFIG_SERVER.RANGE_BUY && aboveTrend && aboveTail) {
+      const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
+      return thin
+        ? { rating: 'ADD', reason: 'Buy zone but thin volume' }
+        : { rating: 'BUY', reason: 'Bottom of band, above 62d & 200d' };
+    }
+    if (rangePos <= RATING_CONFIG_SERVER.RANGE_ADD && aboveTrend) {
+      const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
+      return thin
+        ? { rating: 'HOLD', reason: 'Add zone but thin volume' }
+        : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
+    }
+    if (aboveTrend) return { rating: 'HOLD', reason: "Bullish but mid-band — own, don't chase" };
+  }
+  return { rating: 'HOLD', reason: 'No edge' };
+}
 
 const FMP_KEY = process.env.FMP_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -281,8 +334,21 @@ export default async function handler(req, res) {
     fractalResults.primary.lacunarity.lambda
   );
 
+  // Risk Range + Rating. Lets the AI prompt explicitly address entry
+  // timing (where price sits in the LRR..TRR band, is volume confirming)
+  // and the synthesized BUY/ADD/HOLD/TRIM/SELL call.
+  const riskRange = computeRiskRange(daily, fractalResults.primary.lacunarity.lambda);
+  const rating = computeRatingServer(
+    todayConv,
+    daily.close[daily.close.length - 1],
+    trendResult?.sma62,
+    trendResult?.sma200,
+    riskRange?.range_pos,
+    riskRange?.vol_ratio
+  );
+
   const prompt = buildPrompt(
-    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats
+    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating
   );
 
   let claudeResp;

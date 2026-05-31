@@ -58,7 +58,13 @@ alter table kerry_scores
   add column if not exists sma_15 numeric,
   add column if not exists sma_62 numeric,
   add column if not exists sma_200 numeric,
-  add column if not exists setup text;
+  add column if not exists setup text,
+  add column if not exists lrr numeric,
+  add column if not exists trr numeric,
+  add column if not exists range_pos numeric,
+  add column if not exists realized_vol numeric,
+  add column if not exists vol_ratio numeric,
+  add column if not exists band_k numeric;
 ```
 
 `conviction_history` stores the prior N days of computed conviction scores

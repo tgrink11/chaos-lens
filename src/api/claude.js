@@ -63,7 +63,7 @@ function formatPopulationContext(primary, stats) {
 /**
  * Build the analysis prompt from computed metrics
  */
-export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats) {
+export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating) {
   const p = fractalResults?.primary;
   if (!p) return `Analyze ${symbol} — insufficient data for fractal analysis.`;
 
@@ -149,12 +149,52 @@ Reasoning: ${predictionResult.reasoning.join('; ')}`;
     }
   }
 
+  // Risk Range + Rating context. This is the entry-timing layer:
+  // Conviction says "do I want this direction"; Risk Range says
+  // "is this a good price right now." The Rating synthesizes both.
+  // We surface it explicitly so the AI narrative addresses entry
+  // timing (LRR/TRR band, volume confirmation) and not just direction.
+  if (riskRange && Number.isFinite(riskRange.lrr) && Number.isFinite(riskRange.trr)) {
+    const pos = Number.isFinite(riskRange.range_pos) ? riskRange.range_pos : 0.5;
+    const posLabel = pos <= 0.25 ? 'BOTTOM of band — buy zone'
+      : pos >= 0.75 ? 'TOP of band — trim zone'
+      : pos <= 0.40 ? 'lower half'
+      : pos >= 0.60 ? 'upper half'
+      : 'mid-band';
+    const volTxt = Number.isFinite(riskRange.vol_ratio)
+      ? `5d/50d volume ratio = ${riskRange.vol_ratio.toFixed(2)} (${
+          riskRange.vol_ratio > 1.2 ? 'CONFIRMED — participation behind the move'
+          : riskRange.vol_ratio < 0.8 ? 'THIN — move unconfirmed, treat with skepticism'
+          : 'normal participation'
+        })`
+      : '5d/50d volume ratio = n/a';
+    prompt += `
+
+RISK RANGE (P/V/V band — Hedgeye-style approximation):
+- Probable trading range: $${riskRange.lrr.toFixed(2)} (LRR) – $${riskRange.trr.toFixed(2)} (TRR)
+- Today's price position: ${(pos * 100).toFixed(0)}% of band — ${posLabel}
+- Realized vol (σ, 15-bar): ${Number.isFinite(riskRange.realized_vol) ? (riskRange.realized_vol * 100).toFixed(2) + '%' : 'n/a'}
+- ${volTxt}`;
+  }
+  if (rating && rating.rating) {
+    prompt += `
+
+SYNTHESIZED RATING: ${rating.rating}${rating.reason ? ` — ${rating.reason}` : ''}`;
+  }
+
   prompt += `
 
 Analyze the psychological footprint. Name the mood. Predict the next break.
 If a SETUP PHASE is provided, explicitly address it: is this stock in the
 quiet build-up before a move (ACCUMULATING), the breakout itself, an
 extended trend, or a stable regime? Use the SMA ladder to support the read.
+
+If a RISK RANGE block is provided, address ENTRY TIMING explicitly: is
+today's price near LRR (good entry), near TRR (better to wait or trim),
+or mid-band (no edge)? Does volume confirm the move? A bullish read at
+the top of the band with thin volume is fundamentally different from a
+bullish read at the bottom of the band with confirmed participation —
+the AI Take should make this distinction concrete with specific levels.
 
 Then — REQUIRED — close with a "## 10th Man" section that argues the
 strongest specific case AGAINST your main read and names the concrete

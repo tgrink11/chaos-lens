@@ -128,7 +128,26 @@
                 confidence. <strong>Positive</strong> = bullish setup; <strong>negative</strong> = bearish
                 setup; <strong>near zero</strong> = signals disagree. Click the
                 <span class="text-emerald-700">★ Highest Conviction</span> button to sort the table this way —
-                first click puts the most-bullish at the top, second click flips to most-bearish.</div>
+                first click puts the most-bullish at the top, second click flips to most-bearish. Conviction
+                answers "do I want this direction"; the new <span class="mono">Rating</span> column synthesizes
+                it with the Risk Range to answer "buy now, hold, or trim?"</div>
+              <div><span class="mono font-semibold text-slate-900">Rating</span> — Synthesis of Conviction
+                (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d):
+                <strong>BUY</strong> (bold green) = bullish conviction AND price in bottom 25% of band AND
+                above both 62d & 200d. <strong>ADD</strong> = bullish + price in lower 40% + above 62d.
+                <strong>HOLD</strong> = own it but don't chase — mid-band or signals split.
+                <strong>TRIM</strong> = bullish + price in top 25% (sell-some at TRR); overridden to HOLD if
+                volume strongly confirms the breakout (5d/50d > 1.2). <strong>SELL</strong> = price below 200d
+                (tail break, always wins) OR bearish conviction with top-half price. Volume modifies:
+                BUY → ADD if volume thin (5d/50d &lt; 0.8); ADD → HOLD if thin.</div>
+              <div><span class="mono font-semibold text-slate-900">Risk Range</span> — Probable trading band
+                derived from volatility (σ over 15 bars), widened by lacunarity (vol clustering signals a
+                pending break), with a price marker showing where today's close sits inside the band.
+                Bottom 25% (green tint) is the buy zone (LRR); top 25% (red tint) is the trim/sell zone
+                (TRR). Hover for the exact band, width, and price position. Click the column header to sort
+                by position-in-band — lowest values are the best entries. This is our approximation of
+                Hedgeye's Risk Range methodology using only OHLCV we already pull; it is not their closed
+                formula.</div>
               <div><span class="mono font-semibold text-slate-900">Trend</span> — Four small pills show whether
                 today's price sits above (green ▲) or below (red ▼) the 9, 15, 62, and 200-day simple moving
                 averages. Hover any pill for the actual MA value and the price's % gap to it. A green-green-
@@ -330,6 +349,8 @@
               <th class="sortable px-2 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-center" data-sort="rating" title="Synthesis of Conviction (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d). BUY = bullish + bottom of band + uptrend. TRIM = bullish + top of band. SELL = price below 200d (tail break) or bearish conviction + top half of band.">Rating<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-center" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR=low (buy zone) – TRR=top (sell zone). Marker shows where today's close sits. Click to sort by position-in-band (low = best entry).">Risk Range<span class="sort-arrow"></span></th>
               <th class="px-2 py-2.5 text-center" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
@@ -511,6 +532,97 @@
         return (v >= 0 ? '+' : '') + v.toFixed(2);
       }
 
+      // ───── Risk Range → Rating synthesis ─────
+      //
+      // Conviction answers "do I want this direction." Risk Range answers
+      // "is this a good price right now." Rating combines both with a
+      // tail-break override (price below 200d ⇒ never BUY/ADD, regardless
+      // of conviction). All tunables live in RATING_CONFIG so calibration
+      // is one edit.
+      const RATING_CONFIG = {
+        CONVICTION_GATE: 1.0,    // |C| must exceed this to leave HOLD
+        RANGE_BUY:   0.25,       // range_pos ≤ this counts as bottom of band
+        RANGE_ADD:   0.40,       // ≤ this counts as lower-half
+        RANGE_SELL:  0.60,       // ≥ this for bearish-conviction SELL
+        RANGE_TRIM:  0.75,       // ≥ this for top-of-band TRIM
+        VOL_LOW:     0.8,        // 5d/50d avg ratio below this = thin
+        VOL_HIGH:    1.2,        // ratio above this = confirmed move
+        VOLUME_CONFIRMED_TRIM_OVERRIDE: true,
+        // ^ If a TRIM fires but volume is >VOL_HIGH on an up move, keep as
+        // HOLD instead — don't fade a participation-confirmed breakout.
+        // The most debatable rule; flip this to false to revert.
+      };
+
+      function computeRating(r) {
+        const C = r._conviction;
+        const price = r.price;
+        const sma62 = r.sma_62;
+        const sma200 = r.sma_200;
+        const rangePos = r.range_pos;
+        const volRatio = r.vol_ratio;
+
+        // TAIL-break override: price below 200d ⇒ never BUY/ADD. Wins
+        // over everything else, regardless of conviction.
+        const tailBreak = Number.isFinite(price) && Number.isFinite(sma200) && price < sma200;
+        if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
+
+        const aboveTrend = Number.isFinite(price) && Number.isFinite(sma62) && price > sma62;
+        const aboveTail  = Number.isFinite(price) && Number.isFinite(sma200) && price > sma200;
+
+        // Bearish conviction → SELL when band confirms (top half) or
+        // when even the TREND line has rolled.
+        if (Number.isFinite(C) && C < -RATING_CONFIG.CONVICTION_GATE) {
+          if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
+          if (rangePos >= RATING_CONFIG.RANGE_SELL || !aboveTrend) {
+            return { rating: 'SELL', reason: `Bearish C=${C} + ${rangePos >= RATING_CONFIG.RANGE_SELL ? 'top half of band' : 'below 62d trend'}` };
+          }
+          return { rating: 'HOLD', reason: 'Bearish but mid-band' };
+        }
+
+        // Bullish conviction branches — graded by where price sits in band.
+        if (Number.isFinite(C) && C > RATING_CONFIG.CONVICTION_GATE) {
+          if (rangePos == null) return { rating: 'HOLD', reason: 'Bullish conviction (no range data — never BUY without range)' };
+
+          // Top of band → TRIM, unless volume confirms a real breakout.
+          if (rangePos >= RATING_CONFIG.RANGE_TRIM) {
+            if (RATING_CONFIG.VOLUME_CONFIRMED_TRIM_OVERRIDE
+                && Number.isFinite(volRatio) && volRatio > RATING_CONFIG.VOL_HIGH) {
+              return { rating: 'HOLD', reason: `Top of band but volume confirms (5/50=${volRatio.toFixed(2)})` };
+            }
+            return { rating: 'TRIM', reason: `Top ${Math.round((1 - rangePos) * 100)}% of band` };
+          }
+
+          // Bottom of band + uptrend confirmed by both 62d & 200d → BUY.
+          // Thin volume downgrades BUY→ADD.
+          if (rangePos <= RATING_CONFIG.RANGE_BUY && aboveTrend && aboveTail) {
+            const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
+            return thin
+              ? { rating: 'ADD', reason: `Buy zone but thin volume (5/50=${volRatio.toFixed(2)})` }
+              : { rating: 'BUY', reason: 'Bottom of band, above 62d & 200d' };
+          }
+
+          // Lower half + uptrend → ADD. Thin volume downgrades ADD→HOLD.
+          if (rangePos <= RATING_CONFIG.RANGE_ADD && aboveTrend) {
+            const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
+            return thin
+              ? { rating: 'HOLD', reason: `Add zone but thin volume (5/50=${volRatio.toFixed(2)})` }
+              : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
+          }
+
+          // Bullish conviction + above trend but mid/upper band → HOLD.
+          if (aboveTrend) return { rating: 'HOLD', reason: 'Bullish but mid-band — own, don\'t chase' };
+        }
+
+        return { rating: 'HOLD', reason: 'No edge' };
+      }
+
+      // Continuous entry-quality score for sorting & transparency.
+      // +1 at LRR, -1 at TRR, 0 mid-band.
+      function entryQuality(r) {
+        if (!Number.isFinite(r.range_pos)) return null;
+        return Math.round((0.5 - r.range_pos) * 2 * 100) / 100;
+      }
+
       // Population percentiles. Real US equities cluster in a narrow
       // fractal band (H ≈ 0.49-0.65, D ≈ 1.0-1.2, Λ ≈ 1.08-1.16) so a
       // raw value of 0.56 means very different things depending on the
@@ -629,6 +741,51 @@
         return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${cfg.title}">${cfg.label}</span>`;
       }
 
+      // Rating pill — BUY (bold green) / ADD (green) / HOLD (slate) /
+      // TRIM (orange) / SELL (red). Color-coded by action urgency.
+      const RATING_CONFIG_UI = {
+        BUY:  { cls: 'bg-emerald-100 text-emerald-800 font-bold ring-1 ring-emerald-400' },
+        ADD:  { cls: 'bg-emerald-50 text-emerald-700' },
+        HOLD: { cls: 'bg-slate-100 text-slate-600' },
+        TRIM: { cls: 'bg-orange-100 text-orange-800' },
+        SELL: { cls: 'bg-red-100 text-red-800 font-semibold' },
+      };
+
+      function ratingBadgeHtml(r) {
+        const rating = r._rating;
+        if (!rating) return '<span class="text-slate-400 text-xs">—</span>';
+        const cfg = RATING_CONFIG_UI[rating] || RATING_CONFIG_UI.HOLD;
+        const reason = (r._ratingReason || '').replace(/"/g, '&quot;');
+        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${reason}">${rating}</span>`;
+      }
+
+      // Risk Range visualization: horizontal band with a price marker.
+      // Bottom 25% is green-tinted (buy zone), top 25% is red-tinted
+      // (sell zone), middle 50% is slate. Marker color matches its zone.
+      function riskRangeCellHtml(r) {
+        if (!Number.isFinite(r.lrr) || !Number.isFinite(r.trr) || !Number.isFinite(r.range_pos)) {
+          return '<span class="text-slate-400 text-xs">—</span>';
+        }
+        const pos = Math.max(0, Math.min(1, r.range_pos));
+        const markerLeftPct = (pos * 100).toFixed(1);
+        const zoneColor =
+          pos <= 0.25 ? 'bg-emerald-700'
+          : pos >= 0.75 ? 'bg-red-700'
+          : 'bg-slate-900';
+        const lrrTxt = `$${r.lrr.toFixed(2)}`;
+        const trrTxt = `$${r.trr.toFixed(2)}`;
+        const widthPct = (((r.trr - r.lrr) / r.lrr) * 100).toFixed(1);
+        const tooltip = `Band: ${lrrTxt} – ${trrTxt} (${widthPct}% wide). Price at ${(pos * 100).toFixed(0)}% of band.`;
+        return `
+          <div class="flex flex-col items-center gap-0.5" title="${tooltip}">
+            <div class="relative w-24 h-2.5 rounded overflow-hidden bg-slate-100" style="background: linear-gradient(to right, rgb(220,252,231) 0%, rgb(220,252,231) 25%, rgb(241,245,249) 25%, rgb(241,245,249) 75%, rgb(254,226,226) 75%, rgb(254,226,226) 100%);">
+              <div class="absolute top-0 w-0.5 h-full ${zoneColor}" style="left:${markerLeftPct}%;"></div>
+            </div>
+            <div class="text-[9px] mono text-slate-500 leading-tight">${lrrTxt} – ${trrTxt}</div>
+          </div>
+        `;
+      }
+
       function rowHtml(r) {
         const dir15 = (r.short_term_direction || 'neutral').toLowerCase();
         const dir62 = (r.medium_term_direction || 'neutral').toLowerCase();
@@ -683,6 +840,8 @@
               ${fmtConviction(conv)}
               ${convictionHistoryHtml(r.conviction_history)}
             </td>
+            <td class="px-2 py-2 text-center">${ratingBadgeHtml(r)}</td>
+            <td class="px-2 py-2 text-center">${riskRangeCellHtml(r)}</td>
             <td class="px-2 py-2 text-center">${trendCellHtml(r)}</td>
             <td class="px-2 py-2">${setupBadgeHtml(r.setup)}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
@@ -698,7 +857,7 @@
       function customLoadingRowHtml(symbol) {
         return `
           <tr class="bg-amber-50/50 border-l-4 border-amber-400">
-            <td colspan="17" class="px-4 py-3 text-sm text-slate-600">
+            <td colspan="19" class="px-4 py-3 text-sm text-slate-600">
               <span class="inline-block w-3 h-3 border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin mr-2 align-middle"></span>
               Analyzing <span class="mono font-semibold">${symbol}</span>… (fetching 2y of price history + running fractals)
             </td>
@@ -709,7 +868,7 @@
       function customErrorRowHtml(symbol, error) {
         return `
           <tr class="bg-red-50 border-l-4 border-red-400">
-            <td colspan="17" class="px-4 py-3 text-sm">
+            <td colspan="19" class="px-4 py-3 text-sm">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-red-700">
                   <strong class="mono">${symbol}</strong>: ${error}
@@ -732,12 +891,20 @@
           const q = search.trim().toUpperCase();
           rows = rows.filter((r) => (r.symbol || '').toUpperCase().includes(q));
         }
-        // Sort. `conviction` is a derived field stored on each row as _conviction.
+        // Sort. `conviction` is the client-derived signed score; `rating`
+        // is a categorical pill with its own action-urgency ordering;
+        // everything else maps 1:1 to a row field.
         const dir = sortDir === 'asc' ? 1 : -1;
-        const field = sortBy === 'conviction' ? '_conviction' : sortBy;
+        const RATING_ORDER = { BUY: 5, ADD: 4, HOLD: 3, TRIM: 2, SELL: 1 };
+        let field;
+        let mapForSort;
+        if (sortBy === 'conviction') field = '_conviction';
+        else if (sortBy === 'rating') { field = '_rating'; mapForSort = (v) => RATING_ORDER[v] ?? 0; }
+        else field = sortBy;
+
         rows = [...rows].sort((a, b) => {
-          let av = a[field];
-          let bv = b[field];
+          let av = mapForSort ? mapForSort(a[field]) : a[field];
+          let bv = mapForSort ? mapForSort(b[field]) : b[field];
           if (av == null && bv == null) return 0;
           if (av == null) return 1;
           if (bv == null) return -1;
@@ -798,7 +965,7 @@
           } else {
             sortBy = col;
             // Default to descending for numeric/confidence/score columns
-            const numericDefault = ['price','short_term_confidence','medium_term_confidence','prediction_confidence','conviction','hurst','box_dim','lambda'];
+            const numericDefault = ['price','short_term_confidence','medium_term_confidence','prediction_confidence','conviction','hurst','box_dim','lambda','range_pos','rating'];
             sortDir = numericDefault.includes(col) ? 'desc' : 'asc';
           }
           render();
@@ -857,6 +1024,10 @@
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
           customRow = { ...data, _conviction: convictionScore(data) };
+          const _rt = computeRating(customRow);
+          customRow._rating = _rt.rating;
+          customRow._ratingReason = _rt.reason;
+          customRow._entryQuality = entryQuality(customRow);
           customStatus = 'idle';
           customError = null;
         } catch (e) {
@@ -1072,10 +1243,14 @@
           const resp = await fetch(API_URL, { cache: 'no-cache' });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           const data = await resp.json();
-          allScores = (Array.isArray(data.scores) ? data.scores : []).map((r) => ({
-            ...r,
-            _conviction: convictionScore(r),
-          }));
+          allScores = (Array.isArray(data.scores) ? data.scores : []).map((r) => {
+            const enriched = { ...r, _conviction: convictionScore(r) };
+            const rating = computeRating(enriched);
+            enriched._rating = rating.rating;
+            enriched._ratingReason = rating.reason;
+            enriched._entryQuality = entryQuality(enriched);
+            return enriched;
+          });
           attachPercentiles(allScores);
           els.lastScanned.textContent = data.lastScanned
             ? new Date(data.lastScanned).toLocaleString()

@@ -22,6 +22,7 @@ import { findAnalogs } from '../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../src/engine/prediction.js';
 import { computeTrend } from '../src/engine/trend.js';
 import { computeConviction } from '../src/engine/conviction.js';
+import { computeRiskRange } from '../src/engine/riskRange.js';
 
 const FMP_KEY = process.env.FMP_KEY;
 const CHAOS_LENS_URL = process.env.CHAOS_LENS_URL || '';
@@ -162,6 +163,9 @@ export default async function handler(req, res) {
   const todayConv = computeConviction(partial);
   const trend = computeTrend(daily.close, todayConv, []);
 
+  // Risk Range: same P/V/V band as the cron uses.
+  const risk = computeRiskRange(daily, primary.lacunarity.lambda);
+
   return res.status(200).json({
     ...partial,
     sma_9: trend.sma9,
@@ -169,5 +173,11 @@ export default async function handler(req, res) {
     sma_62: trend.sma62,
     sma_200: trend.sma200,
     setup: trend.setup,
+    lrr: risk.lrr,
+    trr: risk.trr,
+    range_pos: risk.range_pos,
+    realized_vol: risk.realized_vol,
+    vol_ratio: risk.vol_ratio,
+    band_k: risk.band_k,
   });
 }

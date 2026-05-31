@@ -16,6 +16,7 @@ import { findAnalogs } from '../../src/engine/analogs.js';
 import { predictBreak, predictHorizons } from '../../src/engine/prediction.js';
 import { computeTrend } from '../../src/engine/trend.js';
 import { computeConviction } from '../../src/engine/conviction.js';
+import { computeRiskRange } from '../../src/engine/riskRange.js';
 
 const SHEET_ID = process.env.KERRY_SHEET_ID;
 const SHEET_GID = process.env.KERRY_SHEET_GID || '0';
@@ -212,6 +213,12 @@ async function scoreSymbol(symbol, listType, prevHistory) {
   const todayConv = computeConviction(partial);
   const trend = computeTrend(daily.close, todayConv, prevHistory || []);
 
+  // Risk Range: P/V/V band approximating Hedgeye's methodology. Pure
+  // additive layer — Conviction stays unchanged; the client synthesizes
+  // a Rating from both. Requires daily.volume which kerry-scan already
+  // pulls from FMP.
+  const risk = computeRiskRange(daily, primary.lacunarity.lambda);
+
   return {
     ...partial,
     sma_9: trend.sma9,
@@ -219,6 +226,12 @@ async function scoreSymbol(symbol, listType, prevHistory) {
     sma_62: trend.sma62,
     sma_200: trend.sma200,
     setup: trend.setup,
+    lrr: risk.lrr,
+    trr: risk.trr,
+    range_pos: risk.range_pos,
+    realized_vol: risk.realized_vol,
+    vol_ratio: risk.vol_ratio,
+    band_k: risk.band_k,
   };
 }
 
