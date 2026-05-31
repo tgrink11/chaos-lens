@@ -17,10 +17,11 @@
 
       /* Simple/Detailed view toggle: when the table has the .simple-view
          class, hide all elements tagged .detail-only. Conversely .simple-only
-         elements (e.g. the Why column) are visible only in simple view. */
+         elements (the Why column) are hidden by default and revealed only
+         when an ancestor has .simple-view. */
       .simple-view .detail-only { display: none; }
-      :not(.simple-view) > .simple-only,
-      table:not(.simple-view) .simple-only { display: none; }
+      .simple-only { display: none; }
+      .simple-view .simple-only { display: table-cell; }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900">
