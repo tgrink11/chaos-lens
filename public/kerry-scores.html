@@ -14,6 +14,13 @@
       .sortable:hover { background: #f1f5f9; }
       .sort-arrow { display: inline-block; width: 0.6em; margin-left: 0.25em; color: #2563eb; }
       tbody tr:hover { background: #f8fafc; }
+
+      /* Simple/Detailed view toggle: when the table has the .simple-view
+         class, hide all elements tagged .detail-only. Conversely .simple-only
+         elements (e.g. the Why column) are visible only in simple view. */
+      .simple-view .detail-only { display: none; }
+      :not(.simple-view) > .simple-only,
+      table:not(.simple-view) .simple-only { display: none; }
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900">
@@ -304,6 +311,19 @@
     </header>
 
     <main class="px-6 py-6">
+      <!-- View-mode toggle (Simple is default; Detailed surfaces all analytical
+           columns for power users). Choice persists to localStorage. -->
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-medium">View:</span>
+        <div class="inline-flex rounded-md shadow-sm border border-slate-300 overflow-hidden">
+          <button id="view-simple" class="view-toggle px-3 py-1.5 text-sm font-medium transition-colors" type="button">Simple</button>
+          <button id="view-detailed" class="view-toggle px-3 py-1.5 text-sm font-medium border-l border-slate-300 transition-colors" type="button">Detailed</button>
+        </div>
+        <span class="text-xs text-slate-500 ml-2">
+          Simple view shows just the action (Buy / Add / Dip / Hold / Trim / Sell) and why. Switch to Detailed for the full analytical breakdown.
+        </span>
+      </div>
+
       <!-- Filter pills + sort actions -->
       <div class="flex items-center gap-2 mb-4 flex-wrap">
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
@@ -348,21 +368,22 @@
               <th class="sortable px-2 py-2.5 text-left" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="list_type">List<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right" data-sort="price">Price<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="short_term_direction">15-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="short_term_confidence">15d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="medium_term_direction">62-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="short_term_direction">15-Day<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="short_term_confidence">15d Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="medium_term_direction">62-Day<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-center" data-sort="rating" title="Synthesis of Conviction (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d). BUY = bullish + bottom of band + uptrend. TRIM = bullish + top of band. SELL = price below 200d (tail break) or bearish conviction + top half of band.">Rating<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-center" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR=low (buy zone) – TRR=top (sell zone). Marker shows where today's close sits. Click to sort by position-in-band (low = best entry).">Risk Range<span class="sort-arrow"></span></th>
-              <th class="px-2 py-2.5 text-center" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
+              <th class="px-2 py-2.5 text-left simple-only" title="Plain-English explanation of why this stock got its Rating.">Why</th>
+              <th class="sortable px-2 py-2.5 text-center detail-only" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR=low (buy zone) – TRR=top (sell zone). Marker shows where today's close sits. Click to sort by position-in-band (low = best entry).">Risk Range<span class="sort-arrow"></span></th>
+              <th class="px-2 py-2.5 text-center detail-only" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
+              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="hurst">H<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="box_dim">D<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="hurst">H<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="box_dim">D<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
               <th class="px-2 py-2.5 text-center" title="Click 'Get AI take' on any row to run Claude on that ticker. First click costs ~$0.01; cached for 24h so the same stock that day is free.">AI Take</th>
             </tr>
           </thead>
@@ -401,8 +422,11 @@
       let allScores = [];
       let filter = 'all';
       let search = '';
-      let sortBy = 'symbol';
-      let sortDir = 'asc';
+      // Default sort: Rating descending (BUY → ADD → DIP → HOLD → TRIM →
+      // SELL). Subscribers loading the Simple view see the most actionable
+      // signals at the top of the list without having to click anything.
+      let sortBy = 'rating';
+      let sortDir = 'desc';
       let busResearchSymbols = new Set(); // Trent's research tickers
 
       async function loadBusResearchSymbols() {
@@ -751,29 +775,32 @@
           : conv <= -1.0 ? 'text-red-600'
           : 'text-slate-500';
 
+        const whyText = r._subscriberReason || '—';
+        const whyEscaped = String(whyText).replace(/"/g, '&quot;');
         return `
           <tr${rowAttrs}>
             <td class="px-2 py-2 mono font-semibold">${r.symbol}</td>
             <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtPrice(r.price)}</td>
-            <td class="px-3 py-2">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtConf(r.short_term_confidence)}</td>
-            <td class="px-3 py-2">${pill(dir62, DIRECTION_COLOR[dir62] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtConf(r.medium_term_confidence)}</td>
-            <td class="px-3 py-2">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtConf(r.prediction_confidence)}</td>
-            <td class="px-2 py-2 text-right mono num ${convClass}">
+            <td class="px-3 py-2 detail-only">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.short_term_confidence)}</td>
+            <td class="px-3 py-2 detail-only">${pill(dir62, DIRECTION_COLOR[dir62] || DIRECTION_COLOR.neutral)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.medium_term_confidence)}</td>
+            <td class="px-3 py-2 detail-only">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.prediction_confidence)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only ${convClass}">
               ${fmtConviction(conv)}
               ${convictionHistoryHtml(r.conviction_history)}
             </td>
             <td class="px-2 py-2 text-center">${ratingBadgeHtml(r)}</td>
-            <td class="px-2 py-2 text-center">${riskRangeCellHtml(r)}</td>
-            <td class="px-2 py-2 text-center">${trendCellHtml(r)}</td>
-            <td class="px-2 py-2">${setupBadgeHtml(r.setup)}</td>
+            <td class="px-3 py-2 text-sm text-slate-700 simple-only max-w-md" title="${whyEscaped}">${whyText}</td>
+            <td class="px-2 py-2 text-center detail-only">${riskRangeCellHtml(r)}</td>
+            <td class="px-2 py-2 text-center detail-only">${trendCellHtml(r)}</td>
+            <td class="px-2 py-2 detail-only">${setupBadgeHtml(r.setup)}</td>
             <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
-            <td class="px-2 py-2 text-right mono num">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
+            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
             <td class="px-2 py-2 text-center text-xs">${aiTakeCell}</td>
           </tr>
         `;
@@ -783,7 +810,7 @@
       function customLoadingRowHtml(symbol) {
         return `
           <tr class="bg-amber-50/50 border-l-4 border-amber-400">
-            <td colspan="19" class="px-4 py-3 text-sm text-slate-600">
+            <td colspan="20" class="px-4 py-3 text-sm text-slate-600">
               <span class="inline-block w-3 h-3 border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin mr-2 align-middle"></span>
               Analyzing <span class="mono font-semibold">${symbol}</span>… (fetching 2y of price history + running fractals)
             </td>
@@ -794,7 +821,7 @@
       function customErrorRowHtml(symbol, error) {
         return `
           <tr class="bg-red-50 border-l-4 border-red-400">
-            <td colspan="19" class="px-4 py-3 text-sm">
+            <td colspan="20" class="px-4 py-3 text-sm">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-red-700">
                   <strong class="mono">${symbol}</strong>: ${error}
@@ -899,6 +926,46 @@
         });
       });
 
+      // ───── View-mode toggle (Simple ↔ Detailed) ─────
+      //
+      // Simple is the default: shows just Symbol / List / Price / Rating /
+      // Why / Mood / AI Take. Detailed surfaces every analytical column.
+      // Choice persists to localStorage so a subscriber's preference
+      // survives reloads.
+      const VIEW_KEY = 'kerry-scores-view-mode';
+      const tableEl = document.querySelector('#table-wrap table');
+      const btnSimple = document.getElementById('view-simple');
+      const btnDetailed = document.getElementById('view-detailed');
+
+      function applyViewMode(mode) {
+        const simple = mode !== 'detailed';
+        if (tableEl) tableEl.classList.toggle('simple-view', simple);
+        btnSimple.classList.toggle('bg-slate-900', simple);
+        btnSimple.classList.toggle('text-white', simple);
+        btnSimple.classList.toggle('bg-white', !simple);
+        btnSimple.classList.toggle('text-slate-700', !simple);
+        btnDetailed.classList.toggle('bg-slate-900', !simple);
+        btnDetailed.classList.toggle('text-white', !simple);
+        btnDetailed.classList.toggle('bg-white', simple);
+        btnDetailed.classList.toggle('text-slate-700', simple);
+        // When switching mid-session, drop any open AI-take expansions
+        // because their colspan was built for the prior view's column
+        // count and would visually corrupt the layout otherwise.
+        document.querySelectorAll('tr[data-expansion]').forEach(r => r.remove());
+      }
+
+      const initialMode = localStorage.getItem(VIEW_KEY) || 'simple';
+      applyViewMode(initialMode);
+
+      btnSimple.addEventListener('click', () => {
+        localStorage.setItem(VIEW_KEY, 'simple');
+        applyViewMode('simple');
+      });
+      btnDetailed.addEventListener('click', () => {
+        localStorage.setItem(VIEW_KEY, 'detailed');
+        applyViewMode('detailed');
+      });
+
       // "Highest Conviction" button — single-click sort by composite conviction
       // descending (top-bullish at top). Click again to flip to ascending
       // (top-bearish at top) so the same button covers both screens.
@@ -954,6 +1021,7 @@
           const _rt = computeRating(customRow);
           customRow._rating = _rt.rating;
           customRow._ratingReason = _rt.reason;
+          customRow._subscriberReason = _rt.subscriberReason;
           customRow._entryQuality = entryQuality(customRow);
           customStatus = 'idle';
           customError = null;
@@ -1175,6 +1243,7 @@
             const rating = computeRating(enriched);
             enriched._rating = rating.rating;
             enriched._ratingReason = rating.reason;
+            enriched._subscriberReason = rating.subscriberReason;
             enriched._entryQuality = entryQuality(enriched);
             return enriched;
           });

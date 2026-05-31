@@ -58,7 +58,11 @@ function notFailing(v) { return v !== false; }
  *   minimum: _conviction, price, sma_62, sma_200, range_pos, vol_ratio.
  *   `_conviction` is the client-computed signed score (~-5..+5); rows
  *   from /api/kerry-scores need it attached by the caller before passing in.
- * @returns {{ rating: 'BUY'|'ADD'|'DIP'|'HOLD'|'TRIM'|'SELL', reason: string }}
+ * @returns {{
+ *   rating: 'BUY'|'ADD'|'DIP'|'HOLD'|'TRIM'|'SELL',
+ *   reason: string,             // technical reason for tooltips + AI prompt
+ *   subscriberReason: string    // plain-English explanation for the Simple view
+ * }}
  */
 export function computeRating(r) {
   const C = r._conviction;
@@ -66,68 +70,120 @@ export function computeRating(r) {
   const volRatio = r.vol_ratio;
   const { tailBreak, aboveTail, aboveTrend } = trendGates(r.price, r.sma_62, r.sma_200);
 
-  // 1. TAIL-break override: price below 200d (when known) ⇒ never
-  //    BUY/ADD. Wins over everything else, regardless of conviction.
-  if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
+  // 1. TAIL-break override.
+  if (tailBreak) return {
+    rating: 'SELL',
+    reason: 'TAIL break (price < 200d)',
+    subscriberReason: 'Price broke below its long-term support — exit the position.',
+  };
 
-  // 2. Bearish conviction → SELL when range confirms (top half) or when
-  //    even the TREND line has rolled.
+  // 2. Bearish conviction branches.
   if (Number.isFinite(C) && C < -RATING_CONFIG.CONVICTION_GATE) {
-    if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
+    if (rangePos == null) return {
+      rating: 'SELL',
+      reason: 'Bearish conviction (no range data)',
+      subscriberReason: 'Bearish signals across the board — exit or avoid.',
+    };
     if (rangePos >= RATING_CONFIG.RANGE_SELL || aboveTrend === false) {
-      return { rating: 'SELL', reason: `Bearish C=${C} + ${rangePos >= RATING_CONFIG.RANGE_SELL ? 'top half of band' : 'below 62d trend'}` };
+      return {
+        rating: 'SELL',
+        reason: `Bearish C=${C} + ${rangePos >= RATING_CONFIG.RANGE_SELL ? 'top half of band' : 'below 62d trend'}`,
+        subscriberReason: rangePos >= RATING_CONFIG.RANGE_SELL
+          ? 'Bearish trend with price in the upper half of its range — sell into strength.'
+          : 'Bearish trend and intermediate support has broken — exit the position.',
+      };
     }
-    return { rating: 'HOLD', reason: 'Bearish but mid-band' };
+    return {
+      rating: 'HOLD',
+      reason: 'Bearish but mid-band',
+      subscriberReason: 'Direction is weak but no urgent breakdown — wait, don\'t initiate.',
+    };
   }
 
-  // 3. Bullish conviction branches — graded by where price sits in band.
+  // 3. Bullish conviction branches.
   if (Number.isFinite(C) && C > RATING_CONFIG.CONVICTION_GATE) {
-    if (rangePos == null) return { rating: 'HOLD', reason: 'Bullish conviction (no range data — never BUY without range)' };
+    if (rangePos == null) return {
+      rating: 'HOLD',
+      reason: 'Bullish conviction (no range data — never BUY without range)',
+      subscriberReason: 'Bullish signals are strong but the stock is too new to verify a good entry price — hold or watch.',
+    };
 
-    // Top of band → TRIM, unless volume confirms a real breakout.
+    // Top of band → TRIM, unless volume confirms.
     if (rangePos >= RATING_CONFIG.RANGE_TRIM) {
       if (RATING_CONFIG.VOLUME_CONFIRMED_TRIM_OVERRIDE
           && Number.isFinite(volRatio) && volRatio > RATING_CONFIG.VOL_HIGH) {
-        return { rating: 'HOLD', reason: `Top of band but volume confirms (5/50=${volRatio.toFixed(2)})` };
+        return {
+          rating: 'HOLD',
+          reason: `Top of band but volume confirms (5/50=${volRatio.toFixed(2)})`,
+          subscriberReason: 'Stretched price but strong volume backing it — own what you have, don\'t add or trim.',
+        };
       }
-      return { rating: 'TRIM', reason: `Top ${Math.round((1 - rangePos) * 100)}% of band` };
+      return {
+        rating: 'TRIM',
+        reason: `Top ${Math.round((1 - rangePos) * 100)}% of band`,
+        subscriberReason: 'Bullish but price is stretched to the top of its range — lock in some profits here.',
+      };
     }
 
-    // Bottom of band + uptrend (gates pass OR are unknown) → BUY. Thin
-    // volume downgrades BUY→ADD. Null-SMA tolerance lets newly-listed
-    // names with strong conviction still BUY.
+    // Bottom of band + uptrend → BUY (or ADD if thin volume).
     if (rangePos <= RATING_CONFIG.RANGE_BUY && notFailing(aboveTrend) && notFailing(aboveTail)) {
       const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
       return thin
-        ? { rating: 'ADD', reason: `Buy zone but thin volume (5/50=${volRatio.toFixed(2)})` }
-        : { rating: 'BUY', reason: 'Bottom of band, no trend break' };
+        ? {
+            rating: 'ADD',
+            reason: `Buy zone but thin volume (5/50=${volRatio.toFixed(2)})`,
+            subscriberReason: 'Favorable price but light volume — add gradually rather than all at once.',
+          }
+        : {
+            rating: 'BUY',
+            reason: 'Bottom of band, no trend break',
+            subscriberReason: 'Bullish signals lined up and price is at the low end of its range — favorable entry.',
+          };
     }
 
-    // Lower half + uptrend → ADD. Thin volume downgrades ADD→HOLD.
+    // Lower half + uptrend → ADD (or HOLD if thin volume).
     if (rangePos <= RATING_CONFIG.RANGE_ADD && notFailing(aboveTrend)) {
       const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
       return thin
-        ? { rating: 'HOLD', reason: `Add zone but thin volume (5/50=${volRatio.toFixed(2)})` }
-        : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
+        ? {
+            rating: 'HOLD',
+            reason: `Add zone but thin volume (5/50=${volRatio.toFixed(2)})`,
+            subscriberReason: 'Bullish setup but volume is thin — wait for participation before adding.',
+          }
+        : {
+            rating: 'ADD',
+            reason: 'Lower half of band, above 62d',
+            subscriberReason: 'Bullish trend intact with price below mid-range — good place to add to an existing position.',
+          };
     }
 
-    // Bullish conviction + above trend (or unknown) but mid/upper band → HOLD.
-    if (notFailing(aboveTrend)) return { rating: 'HOLD', reason: "Bullish but mid-band — own, don't chase" };
+    // Mid/upper band + uptrend → HOLD.
+    if (notFailing(aboveTrend)) return {
+      rating: 'HOLD',
+      reason: "Bullish but mid-band — own, don't chase",
+      subscriberReason: 'Bullish trend but price is mid-range — own it but don\'t chase a higher entry.',
+    };
   }
 
-  // 4. DIP — pullback into the buy zone with mid-conviction. Not strong
-  //    enough to BUY, but not a HOLD either. Flags genuine pullback-in-
-  //    uptrend setups for watch-list attention.
+  // 4. DIP — pullback into the buy zone with mid-conviction.
   if (rangePos != null
       && rangePos <= RATING_CONFIG.RANGE_BUY
       && notFailing(aboveTail)
       && Number.isFinite(C)
       && C >= RATING_CONFIG.CONVICTION_DIP_LO
       && C <= RATING_CONFIG.CONVICTION_DIP_HI) {
-    return { rating: 'DIP', reason: `In buy zone (range_pos=${rangePos.toFixed(2)}), mid-conviction (C=${C}) — watch for momentum to turn` };
+    return {
+      rating: 'DIP',
+      reason: `In buy zone (range_pos=${rangePos.toFixed(2)}), mid-conviction (C=${C}) — watch for momentum to turn`,
+      subscriberReason: 'Pulled back into support and long-term trend intact — watch for momentum to confirm before buying.',
+    };
   }
 
-  return { rating: 'HOLD', reason: 'No edge' };
+  return {
+    rating: 'HOLD',
+    reason: 'No edge',
+    subscriberReason: 'Signals are mixed — no clear action right now.',
+  };
 }
 
 /**
