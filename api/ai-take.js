@@ -35,6 +35,8 @@ import { buildPrompt, SYSTEM_PROMPT } from '../src/api/claude.js';
 // change one, change both.
 const RATING_CONFIG_SERVER = {
   CONVICTION_GATE: 1.0,
+  CONVICTION_DIP_LO: -0.5,
+  CONVICTION_DIP_HI: 1.0,
   RANGE_BUY: 0.25,
   RANGE_ADD: 0.40,
   RANGE_SELL: 0.60,
@@ -44,14 +46,23 @@ const RATING_CONFIG_SERVER = {
   VOLUME_CONFIRMED_TRIM_OVERRIDE: true,
 };
 
+// Tri-state gate booleans. null = "no data, don't veto" — newly-listed
+// names without 200 bars of history can still rate when conviction +
+// range_pos warrant.
+function notFailing(v) { return v !== false; }
+
 function computeRatingServer(C, price, sma62, sma200, rangePos, volRatio) {
-  const tailBreak = Number.isFinite(price) && Number.isFinite(sma200) && price < sma200;
+  const hasTail  = Number.isFinite(price) && Number.isFinite(sma200);
+  const hasTrend = Number.isFinite(price) && Number.isFinite(sma62);
+  const tailBreak = hasTail && price < sma200;
+  const aboveTail  = hasTail ? price > sma200 : null;
+  const aboveTrend = hasTrend ? price > sma62 : null;
+
   if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
-  const aboveTrend = Number.isFinite(price) && Number.isFinite(sma62) && price > sma62;
-  const aboveTail = Number.isFinite(price) && Number.isFinite(sma200) && price > sma200;
+
   if (Number.isFinite(C) && C < -RATING_CONFIG_SERVER.CONVICTION_GATE) {
     if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
-    if (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL || !aboveTrend) {
+    if (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL || aboveTrend === false) {
       return { rating: 'SELL', reason: 'Bearish C + ' + (rangePos >= RATING_CONFIG_SERVER.RANGE_SELL ? 'top half of band' : 'below 62d trend') };
     }
     return { rating: 'HOLD', reason: 'Bearish but mid-band' };
@@ -65,19 +76,30 @@ function computeRatingServer(C, price, sma62, sma200, rangePos, volRatio) {
       }
       return { rating: 'TRIM', reason: 'Top of band' };
     }
-    if (rangePos <= RATING_CONFIG_SERVER.RANGE_BUY && aboveTrend && aboveTail) {
+    if (rangePos <= RATING_CONFIG_SERVER.RANGE_BUY && notFailing(aboveTrend) && notFailing(aboveTail)) {
       const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
       return thin
         ? { rating: 'ADD', reason: 'Buy zone but thin volume' }
-        : { rating: 'BUY', reason: 'Bottom of band, above 62d & 200d' };
+        : { rating: 'BUY', reason: 'Bottom of band, no trend break' };
     }
-    if (rangePos <= RATING_CONFIG_SERVER.RANGE_ADD && aboveTrend) {
+    if (rangePos <= RATING_CONFIG_SERVER.RANGE_ADD && notFailing(aboveTrend)) {
       const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG_SERVER.VOL_LOW;
       return thin
         ? { rating: 'HOLD', reason: 'Add zone but thin volume' }
         : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
     }
-    if (aboveTrend) return { rating: 'HOLD', reason: "Bullish but mid-band — own, don't chase" };
+    if (notFailing(aboveTrend)) return { rating: 'HOLD', reason: "Bullish but mid-band — own, don't chase" };
+  }
+
+  // DIP: range_pos low + above tail (or no tail data) + mid-conviction.
+  // Flags pullbacks-in-uptrend that the strict BUY gate misses.
+  if (rangePos != null
+      && rangePos <= RATING_CONFIG_SERVER.RANGE_BUY
+      && notFailing(aboveTail)
+      && Number.isFinite(C)
+      && C >= RATING_CONFIG_SERVER.CONVICTION_DIP_LO
+      && C <= RATING_CONFIG_SERVER.CONVICTION_DIP_HI) {
+    return { rating: 'DIP', reason: 'In buy zone, mid-conviction — watch for momentum to turn' };
   }
   return { rating: 'HOLD', reason: 'No edge' };
 }

@@ -134,12 +134,18 @@
               <div><span class="mono font-semibold text-slate-900">Rating</span> — Synthesis of Conviction
                 (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d):
                 <strong>BUY</strong> (bold green) = bullish conviction AND price in bottom 25% of band AND
-                above both 62d & 200d. <strong>ADD</strong> = bullish + price in lower 40% + above 62d.
+                no trend break (gates pass when SMAs are unknown — newly-listed names with strong conviction
+                can still BUY).
+                <strong>ADD</strong> = bullish + price in lower 40% + above 62d (or unknown).
+                <strong class="text-sky-700">DIP</strong> (light blue) = price in bottom 25% + above 200d
+                (or unknown) + mid-conviction (C between -0.5 and +1.0). Stocks pulling back into the buy
+                zone that aren't yet confirmed bullish — watch list candidates, not buys yet.
                 <strong>HOLD</strong> = own it but don't chase — mid-band or signals split.
                 <strong>TRIM</strong> = bullish + price in top 25% (sell-some at TRR); overridden to HOLD if
-                volume strongly confirms the breakout (5d/50d > 1.2). <strong>SELL</strong> = price below 200d
-                (tail break, always wins) OR bearish conviction with top-half price. Volume modifies:
-                BUY → ADD if volume thin (5d/50d &lt; 0.8); ADD → HOLD if thin.</div>
+                volume strongly confirms the breakout (5d/50d > 1.2).
+                <strong>SELL</strong> = price below 200d (tail break, always wins) OR bearish conviction with
+                top-half price.
+                Volume modifies: BUY → ADD if volume thin (5d/50d &lt; 0.8); ADD → HOLD if thin.</div>
               <div><span class="mono font-semibold text-slate-900">Risk Range</span> — Probable trading band
                 derived from volatility (σ over 15 bars), widened by lacunarity (vol clustering signals a
                 pending break), with a price marker showing where today's close sits inside the band.
@@ -540,7 +546,9 @@
       // of conviction). All tunables live in RATING_CONFIG so calibration
       // is one edit.
       const RATING_CONFIG = {
-        CONVICTION_GATE: 1.0,    // |C| must exceed this to leave HOLD
+        CONVICTION_GATE: 1.0,    // |C| must exceed this to leave HOLD/DIP
+        CONVICTION_DIP_LO: -0.5, // DIP fires when C is in this range AND
+        CONVICTION_DIP_HI: 1.0,  //   range_pos ≤ RANGE_BUY AND above tail.
         RANGE_BUY:   0.25,       // range_pos ≤ this counts as bottom of band
         RANGE_ADD:   0.40,       // ≤ this counts as lower-half
         RANGE_SELL:  0.60,       // ≥ this for bearish-conviction SELL
@@ -553,33 +561,45 @@
         // The most debatable rule; flip this to false to revert.
       };
 
+      // Tri-state booleans for trend gates. `null` SMA → "no data, don't
+      // veto" rather than "fail closed." Newly-listed names with under
+      // 200 bars get the trend gates skipped entirely so they can still
+      // BUY/SELL when conviction + range_pos warrant it.
+      function trendGates(price, sma62, sma200) {
+        const hasTail  = Number.isFinite(price) && Number.isFinite(sma200);
+        const hasTrend = Number.isFinite(price) && Number.isFinite(sma62);
+        return {
+          tailBreak: hasTail && price < sma200,
+          aboveTail: hasTail ? price > sma200 : null,   // null = unknown, treat as pass
+          aboveTrend: hasTrend ? price > sma62 : null,  // null = unknown, treat as pass
+        };
+      }
+
+      // Convenience: treat null (no-data) as "doesn't veto," i.e. don't
+      // block a BUY just because we lack a 200d on a newly-listed name.
+      function notFailing(v) { return v !== false; }
+
       function computeRating(r) {
         const C = r._conviction;
-        const price = r.price;
-        const sma62 = r.sma_62;
-        const sma200 = r.sma_200;
         const rangePos = r.range_pos;
         const volRatio = r.vol_ratio;
+        const { tailBreak, aboveTail, aboveTrend } = trendGates(r.price, r.sma_62, r.sma_200);
 
-        // TAIL-break override: price below 200d ⇒ never BUY/ADD. Wins
-        // over everything else, regardless of conviction.
-        const tailBreak = Number.isFinite(price) && Number.isFinite(sma200) && price < sma200;
+        // 1. TAIL-break override: price below 200d (when known) ⇒ never
+        //    BUY/ADD. Wins over everything else, regardless of conviction.
         if (tailBreak) return { rating: 'SELL', reason: 'TAIL break (price < 200d)' };
 
-        const aboveTrend = Number.isFinite(price) && Number.isFinite(sma62) && price > sma62;
-        const aboveTail  = Number.isFinite(price) && Number.isFinite(sma200) && price > sma200;
-
-        // Bearish conviction → SELL when band confirms (top half) or
-        // when even the TREND line has rolled.
+        // 2. Bearish conviction → SELL when range confirms (top half) or
+        //    when even the TREND line has rolled.
         if (Number.isFinite(C) && C < -RATING_CONFIG.CONVICTION_GATE) {
           if (rangePos == null) return { rating: 'SELL', reason: 'Bearish conviction (no range data)' };
-          if (rangePos >= RATING_CONFIG.RANGE_SELL || !aboveTrend) {
+          if (rangePos >= RATING_CONFIG.RANGE_SELL || aboveTrend === false) {
             return { rating: 'SELL', reason: `Bearish C=${C} + ${rangePos >= RATING_CONFIG.RANGE_SELL ? 'top half of band' : 'below 62d trend'}` };
           }
           return { rating: 'HOLD', reason: 'Bearish but mid-band' };
         }
 
-        // Bullish conviction branches — graded by where price sits in band.
+        // 3. Bullish conviction branches — graded by where price sits in band.
         if (Number.isFinite(C) && C > RATING_CONFIG.CONVICTION_GATE) {
           if (rangePos == null) return { rating: 'HOLD', reason: 'Bullish conviction (no range data — never BUY without range)' };
 
@@ -592,25 +612,43 @@
             return { rating: 'TRIM', reason: `Top ${Math.round((1 - rangePos) * 100)}% of band` };
           }
 
-          // Bottom of band + uptrend confirmed by both 62d & 200d → BUY.
-          // Thin volume downgrades BUY→ADD.
-          if (rangePos <= RATING_CONFIG.RANGE_BUY && aboveTrend && aboveTail) {
+          // Bottom of band + uptrend (62d & 200d gates pass OR are unknown)
+          // → BUY. Thin volume downgrades BUY→ADD. Null-SMA tolerance lets
+          // newly-listed names with strong conviction still BUY.
+          if (rangePos <= RATING_CONFIG.RANGE_BUY && notFailing(aboveTrend) && notFailing(aboveTail)) {
             const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
             return thin
               ? { rating: 'ADD', reason: `Buy zone but thin volume (5/50=${volRatio.toFixed(2)})` }
-              : { rating: 'BUY', reason: 'Bottom of band, above 62d & 200d' };
+              : { rating: 'BUY', reason: 'Bottom of band, no trend break' };
           }
 
           // Lower half + uptrend → ADD. Thin volume downgrades ADD→HOLD.
-          if (rangePos <= RATING_CONFIG.RANGE_ADD && aboveTrend) {
+          if (rangePos <= RATING_CONFIG.RANGE_ADD && notFailing(aboveTrend)) {
             const thin = Number.isFinite(volRatio) && volRatio < RATING_CONFIG.VOL_LOW;
             return thin
               ? { rating: 'HOLD', reason: `Add zone but thin volume (5/50=${volRatio.toFixed(2)})` }
               : { rating: 'ADD', reason: 'Lower half of band, above 62d' };
           }
 
-          // Bullish conviction + above trend but mid/upper band → HOLD.
-          if (aboveTrend) return { rating: 'HOLD', reason: 'Bullish but mid-band — own, don\'t chase' };
+          // Bullish conviction + above trend (or unknown trend) but mid/upper
+          // band → HOLD.
+          if (notFailing(aboveTrend)) return { rating: 'HOLD', reason: 'Bullish but mid-band — own, don\'t chase' };
+        }
+
+        // 4. DIP — new bucket. Stocks pulling back into the buy zone with
+        //    mid-conviction (not strongly bullish, not strongly bearish)
+        //    and no tail break. They aren't BUYs (conviction not yet
+        //    confirmed), but they're not just HOLDs either — they're
+        //    on the watch list for "wait for momentum to turn." Lets the
+        //    table flag the genuine pullback-in-uptrend setups that the
+        //    BUY criterion was too strict to surface.
+        if (rangePos != null
+            && rangePos <= RATING_CONFIG.RANGE_BUY
+            && notFailing(aboveTail)
+            && Number.isFinite(C)
+            && C >= RATING_CONFIG.CONVICTION_DIP_LO
+            && C <= RATING_CONFIG.CONVICTION_DIP_HI) {
+          return { rating: 'DIP', reason: `In buy zone (range_pos=${rangePos.toFixed(2)}), mid-conviction (C=${C}) — watch for momentum to turn` };
         }
 
         return { rating: 'HOLD', reason: 'No edge' };
@@ -746,6 +784,7 @@
       const RATING_CONFIG_UI = {
         BUY:  { cls: 'bg-emerald-100 text-emerald-800 font-bold ring-1 ring-emerald-400' },
         ADD:  { cls: 'bg-emerald-50 text-emerald-700' },
+        DIP:  { cls: 'bg-sky-100 text-sky-800 ring-1 ring-sky-300' },
         HOLD: { cls: 'bg-slate-100 text-slate-600' },
         TRIM: { cls: 'bg-orange-100 text-orange-800' },
         SELL: { cls: 'bg-red-100 text-red-800 font-semibold' },
@@ -895,7 +934,7 @@
         // is a categorical pill with its own action-urgency ordering;
         // everything else maps 1:1 to a row field.
         const dir = sortDir === 'asc' ? 1 : -1;
-        const RATING_ORDER = { BUY: 5, ADD: 4, HOLD: 3, TRIM: 2, SELL: 1 };
+        const RATING_ORDER = { BUY: 6, ADD: 5, DIP: 4, HOLD: 3, TRIM: 2, SELL: 1 };
         let field;
         let mapForSort;
         if (sortBy === 'conviction') field = '_conviction';
