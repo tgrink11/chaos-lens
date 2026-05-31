@@ -28,7 +28,28 @@ export const RISK_RANGE_CONFIG = {
   VOL_FAST_WINDOW: 5,        // short-term volume average
   VOL_SLOW_WINDOW: 50,       // baseline volume average
   MIN_HISTORY: 50,           // bars required to emit any range
+  CENTER_EMA_PERIOD: 9,      // band centers on N-day EMA, not last close.
+                             // The spec called this out as a calibration
+                             // option and it's the correct choice: with
+                             // center=close, range_pos is always exactly
+                             // 0.5 at scan time and BUY/TRIM can never
+                             // fire. Centering on a lagged EMA lets
+                             // today's close land above or below the
+                             // baseline, which is what makes the band
+                             // signal actionable.
 };
+
+// Exponential moving average.
+function ema(arr, period) {
+  if (!Array.isArray(arr) || arr.length < period) return null;
+  const k = 2 / (period + 1);
+  // Initialize with SMA over the first `period` bars, then walk forward.
+  let val = arr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < arr.length; i++) {
+    val = arr[i] * k + val * (1 - k);
+  }
+  return val;
+}
 
 function stdev(arr) {
   const n = arr.length;
@@ -107,21 +128,30 @@ export function computeRiskRange(daily, lambda) {
   );
   const kAdj = RISK_RANGE_CONFIG.BASE_K * (1 + widen);
 
-  // Band centered on the most recent close. (Alternative: 9-day EMA — see
-  // calibration note in the spec; we go with last close because it's the
-  // anchor traders see on their screens.)
+  // Band centered on the N-day EMA (CENTER_EMA_PERIOD), not the latest
+  // close. This is the critical calibration choice: with center=close,
+  // today's price IS the center and range_pos is always 0.5 at scan time,
+  // which means BUY (range_pos ≤ 0.25) and TRIM (range_pos ≥ 0.75) can
+  // NEVER fire on the nightly scan. Using an EMA lag lets today's close
+  // land above or below the recent baseline, so a stock that pulled
+  // back into its EMA shows up in the buy zone and a stock that's
+  // stretched above its EMA shows up in the trim zone.
   const price = daily.close[N - 1];
   if (!Number.isFinite(price) || price <= 0) return empty;
-  const halfWidth = price * sigma * kAdj;
-  const lrr = price - halfWidth;
-  const trr = price + halfWidth;
+  const center = ema(daily.close, RISK_RANGE_CONFIG.CENTER_EMA_PERIOD);
+  if (!Number.isFinite(center) || center <= 0) return empty;
 
-  // range_pos: 0 = at LRR (buy zone), 1 = at TRR (sell zone). For
-  // computing today's location we just use the current price, which by
-  // construction sits at center → range_pos = 0.5. The interesting case
-  // is intraday/next-day — but at scan time it's always mid-band. We
-  // still emit it for consistency and so a custom-ticker analyzed mid-day
-  // (when the price has moved off close) shows the right value.
+  // Half-width scales by the band's own center (not by current price) so
+  // the LRR/TRR are a stable structure around the EMA. The current price
+  // can then sit anywhere inside (or even outside) this band.
+  const halfWidth = center * sigma * kAdj;
+  const lrr = center - halfWidth;
+  const trr = center + halfWidth;
+
+  // range_pos: 0 = at/below LRR (buy zone), 1 = at/above TRR (sell zone).
+  // Clamped to [0,1] even when price has broken outside the band — the
+  // direction signal "well below band" / "well above band" is still
+  // captured by the saturation.
   const rangePos = clamp((price - lrr) / (trr - lrr), 0, 1);
 
   // Volume confirmation: 5-day avg vs 50-day avg. >1.2 = participation
