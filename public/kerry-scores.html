@@ -69,246 +69,131 @@
       <div id="explain-panel" class="hidden border-t border-slate-200 bg-slate-50">
         <div class="px-6 py-6 max-w-5xl mx-auto text-sm text-slate-700 space-y-6 leading-relaxed">
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">Where the data comes from</h2>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">What this page does</h2>
             <p>
-              Every weekday at 6:00 pm ET — about two hours after the US market close — a scheduled job pulls
-              the latest ticker lists from Kerry's Google Sheet (Tell Sheet and Watchlist) and fetches two years
-              of daily OHLCV data for each symbol. That price history is then run through the
-              <em>chaos-lens</em> fractal engine, and the results land in the table below. No human intervention
-              is required; the page you're looking at is the unedited model output.
+              Every weekday after the market closes, this page automatically analyzes every stock on
+              Kerry's Tell Sheet and Watchlist. It looks at two years of price action for each one and
+              gives you a clear, one-word answer: <strong>BUY, ADD, DIP, HOLD, TRIM, or SELL</strong>.
+              That answer is the <strong>Rating</strong> column, and it's the only column you need to
+              read to use this page well. Everything else exists to explain or back up the Rating.
             </p>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">What the engine measures</h2>
-            <p class="mb-3">
-              Three fractal metrics describe the <em>shape</em> of recent price action — not the direction, just
-              how the chart looks geometrically. The engine pairs them with a momentum/behavioral layer (recent
-              return, candle wicks, volume spikes) to translate shape into a directional read.
-            </p>
-            <ul class="space-y-2 ml-1">
-              <li><span class="mono font-semibold text-slate-900">Hurst (H)</span> — persistence.
-                Computed via <em>Detrended Fluctuation Analysis (DFA)</em>, which is the literature-standard fix
-                for small-sample bias on ~700-bar daily series (the previous Rescaled-Range implementation drifted
-                toward H ≈ 0.55 for every stock regardless of actual behavior). Now: H&nbsp;>&nbsp;0.55 means
-                trending (moves persist), H&nbsp;≈&nbsp;0.5 is a random walk (no edge), H&nbsp;<&nbsp;0.45 is
-                mean-reverting (every move tends to reverse). H measures persistence, not direction — a strong
-                downtrend has high H too.</li>
-              <li><span class="mono font-semibold text-slate-900">Box dimension (D)</span> — path complexity.
-                Computed via <em>Higuchi fractal dimension</em>, which operates directly on the sequential price
-                series with no 2D gridding (the previous box-counting code undersampled line segments between
-                consecutive bars and biased D downward). Now: D&nbsp;close to 1 is a clean line (steady trend),
-                D&nbsp;near 1.5 is typical market chop, D&nbsp;near 2 is space-filling chaos (frantic noise).</li>
-              <li><span class="mono font-semibold text-slate-900">Lacunarity (Λ)</span> — volatility clustering.
-                Computed via gliding-box on <em>absolute log returns</em> (not binary up/down day flags — the
-                previous binary thresholding washed out the actual clustering signal so every stock read
-                Λ ≈ 1.05). Now: Λ&nbsp;>&nbsp;1.4 means volatility is clustered into pockets — quiet
-                accumulation followed by bursts, or steady move followed by news shocks. Λ&nbsp;close to 1 means
-                uniform volatility (no concentration). High Λ often precedes directional moves once the
-                clusters resolve.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">How to read each column</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-              <div><span class="mono font-semibold text-slate-900">Symbol / List</span> — Ticker and which list it
-                came from (Tell Sheet or Watchlist). HUT and MRVL appear on both lists; only one row is stored,
-                tagged with whichever list was scored last.</div>
-              <div><span class="mono font-semibold text-slate-900">Price</span> — Most recent daily close from the
-                two-year history pulled at scan time. Not a real-time quote.</div>
-              <div><span class="mono font-semibold text-slate-900">15-Day / 62-Day</span> — Directional outlook for
-                the next ~3 and ~13 trading weeks, derived from horizon-matched analog windows (the engine searches
-                historical periods with similar fractal signatures and looks at what happened 15 or 62 bars later).
-                <em>Bullish</em> / <em>bearish</em> / <em>neutral</em>.</div>
-              <div><span class="mono font-semibold text-slate-900">15d / 62d Conf</span> — How concentrated the
-                bullish/bearish vote is. 90% is the cap; anything &gt;70% means most signals agree. &lt;50% means
-                the model is uncertain.</div>
-              <div><span class="mono font-semibold text-slate-900">Prediction</span> — The engine's single
-                "next-break" call. <em>Thrust Up</em> expects a breakout higher; <em>Cascade Down</em> expects a
-                sharp decline; <em>Consolidation</em> means no clear direction — likely chop.</div>
-              <div><span class="mono font-semibold text-slate-900">Pred Conf</span> — How dominant the winning
-                call was vs. the runners-up. &gt;60% is a high-conviction signal; &lt;40% means competing
-                interpretations.</div>
-              <div><span class="mono font-semibold text-slate-900">Conviction</span> — Composite score (roughly
-                −5 to +5) that rewards alignment of the five signals: 15-day direction, 62-day direction,
-                prediction, mood, and a low-D (smooth path) bonus. Each direction signal is weighted by its
-                confidence. <strong>Positive</strong> = bullish setup; <strong>negative</strong> = bearish
-                setup; <strong>near zero</strong> = signals disagree. Click the
-                <span class="text-emerald-700">★ Highest Conviction</span> button to sort the table this way —
-                first click puts the most-bullish at the top, second click flips to most-bearish. Conviction
-                answers "do I want this direction"; the new <span class="mono">Rating</span> column synthesizes
-                it with the Risk Range to answer "buy now, hold, or trim?"</div>
-              <div><span class="mono font-semibold text-slate-900">Rating</span> — Synthesis of Conviction
-                (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d) + Fractal
-                confirmation (Hurst persistent, Box dim smooth, Λ uniform):
-                <strong>BUY</strong> (bold green) = bullish conviction AND price in bottom 25% of band AND
-                above 62d & 200d AND fractals confirm a real trend (not random walk).
-                <strong>ADD</strong> = bullish + price in lower 40% + above 62d (or unknown).
-                <strong class="text-sky-700">DIP</strong> (light blue) = price in bottom 25% + above 200d
-                (or unknown) + mid-conviction (C between -0.5 and +1.0). Stocks pulling back into the buy
-                zone that aren't yet confirmed bullish — watch list candidates, not buys yet.
-                <strong>HOLD</strong> = own it but don't chase — mid-band or signals split.
-                <strong>TRIM</strong> = bullish + price in top 25% (sell-some at TRR); overridden to HOLD if
-                volume strongly confirms the breakout (5d/50d > 1.2).
-                <strong>SELL</strong> = price below 200d (tail break, always wins) OR bearish conviction with
-                top-half price.
-                Volume modifies: BUY → ADD if volume thin (5d/50d &lt; 0.8); ADD → HOLD if thin.</div>
-              <div><span class="mono font-semibold text-slate-900">Risk Range</span> — Probable trading band
-                derived from volatility (σ over 15 bars), widened by lacunarity (vol clustering signals a
-                pending break), with a price marker showing where today's close sits inside the band.
-                Bottom 25% (green tint) is the buy zone (LRR); top 25% (red tint) is the trim/sell zone
-                (TRR). Hover for the exact band, width, and price position. Click the column header to sort
-                by position-in-band — lowest values are the best entries. This is our approximation of
-                Hedgeye's Risk Range methodology using only OHLCV we already pull; it is not their closed
-                formula.</div>
-              <div><span class="mono font-semibold text-slate-900">Trend</span> — Three pills show whether price
-                sits above (green ▲) or below (red ▼) the 15, 62, and 200-day simple moving averages.
-                <strong>62-day is make-or-break</strong> — above it means the medium-term trend is intact.
-                <strong>200-day is the line of last resort</strong> — nothing good happens below it (BUY ratings
-                require price above 200d; a break triggers an automatic SELL via the TAIL gate). The 9-day was
-                removed from the engine — too noisy to carry signal at this timescale. "Real trend" in the
-                rating logic = price above 62d AND the fractal signature confirms (Hurst persistent, Box dim
-                smooth, Λ uniform).</div>
-              <div><span class="mono font-semibold text-slate-900">Setup</span> — The phase of the trend cycle:
-                <strong>Accum</strong> (blue) flags the quiet build-up phase — short-term MAs turning up,
-                conviction rising but not yet spiking. <strong>Breakout</strong> (bold green) flags the day
-                conviction jumped from sub-1.5 to over 2.0 with price above the short MA stack.
-                <strong>Extended</strong> (orange) means conviction has been hot for 4+ of the last 5 days —
-                trend is mature, chasing here is risky. <strong>Uptrend</strong> / <strong>Downtrend</strong>
-                are the stable in-trend states. <strong>Neutral</strong> means no edge. The signal you want
-                for catching moves early is <em>Accum</em>.</div>
-              <div><span class="mono font-semibold text-slate-900">Mood</span> — Market psychology label.
-                <em>Euphoria</em> = trending up with healthy structure;
-                <em>Panic</em> = breakdown plus high fear;
-                <em>Stealth Build</em> = quiet accumulation pattern, often precedes a move up;
-                <em>Grind</em> = directionless chop.</div>
-              <div><span class="mono font-semibold text-slate-900">H / D / Λ</span> — Raw fractal values explained
-                above. Useful for spotting your own setups (e.g. sort by H descending to find the strongest
-                persistence; sort by D ascending to find the smoothest paths).</div>
-              <div><span class="mono font-semibold text-slate-900">AI Take</span> — Click <em>Get AI take</em> on any
-                row to run Claude on that ticker. The expanded panel renders the same fractal-analysis narrative
-                you'd see on the full chaos-lens report. Claude receives the SMA ladder + setup phase
-                (Accum / Breakout / Extended / etc.) as additional context and explicitly addresses where
-                the stock is in its trend cycle. Every take now ends with a required <strong>"10th Man"</strong>
-                section — the contrarian read, named after the military-intelligence discipline of forcing
-                one voice to argue the opposite case even when all signals agree. It identifies the
-                strongest specific counter-thesis and the concrete signal that would falsify the main view.
-                First click costs ~$0.01 and caches for 24h; hit <em>Refresh</em> in the panel for a fresh
-                call when you want the newest framing.</div>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">What each Rating means</h2>
+            <div class="space-y-2 ml-1">
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-bold ring-1 ring-emerald-400 mr-2">BUY</span>
+                Strong bullish setup. Direction is confirmed across short, medium, and long terms; the
+                price is at the low end of its recent trading range; and the underlying price action
+                shows a real, persistent trend (not just noise). The model's strongest "act now" call.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 mr-2">ADD</span>
+                Same direction as BUY, but the price is in the lower half of its range instead of the
+                bottom 25%. Good place to add to a position you already own.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-sky-100 text-sky-800 ring-1 ring-sky-300 mr-2">DIP</span>
+                Pulled back to support, long-term trend still intact, price action confirms a real
+                trend — but conviction hasn't fully turned bullish yet. <em>Watch list</em> candidate.
+                Wait for the momentum to confirm before buying.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 mr-2">HOLD</span>
+                No clear edge. Either signals are mixed, price is mid-range, or the trend hasn't been
+                confirmed. Don't initiate a new position; existing positions are fine to keep.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-800 mr-2">TRIM</span>
+                Bullish stock but the price has rallied to the top of its range — you'd be buying near
+                a short-term peak. Take some profits, don't add. (If volume strongly confirms the
+                breakout, the model softens this to HOLD instead.)</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 font-semibold mr-2">SELL</span>
+                Either the price broke below its 200-day moving average — the long-term support line
+                that defines "still trending" — or bearish direction is confirmed with price in the
+                upper half of its range. Exit the position.</div>
             </div>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">Analyze any ticker</h2>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Step by step: how to use the page each morning</h2>
+            <ol class="list-decimal ml-5 space-y-2">
+              <li><strong>Open the page.</strong> Default view is "Simple" — fewer columns, less noise.
+                The Rating column tells you the bottom line; the Why column explains it in one sentence.</li>
+              <li><strong>Sort by Rating</strong> (already the default). The top of the list is BUY → ADD
+                → DIP → HOLD → TRIM → SELL. You're looking for action at the top.</li>
+              <li><strong>If you see a BUY or ADD</strong>, read the Why. It'll tell you in plain English
+                what's lined up. If the Mood column also shows <em>Euphoria</em> or <em>Stealth Build</em>,
+                that backs up the call.</li>
+              <li><strong>For any stock you want to dig deeper on</strong>, click <em>Get AI take</em>.
+                Claude analyzes the same data the table sees and writes a short narrative — including a
+                required "10th Man" section that argues the contrarian case (what would make this wrong).
+                First click on a stock costs about one cent; the answer caches for 24 hours so re-opening
+                it the same day is free.</li>
+              <li><strong>Use the filter pills</strong> to narrow to <em>Tell Sheet</em> only,
+                <em>Watchlist</em> only, or other lists. Or type a ticker into "Filter by symbol" to
+                jump straight to one stock.</li>
+              <li><strong>To analyze a stock that's not on any list</strong>, type its ticker into
+                "Analyze any ticker" and hit Analyze. You'll get a fresh row with the same Rating and
+                AI Take features as the rest of the table.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">When the page says "no actionable buys"</h2>
             <p>
-              The <em>Analyze any ticker…</em> input next to <span class="text-emerald-700">★ Highest Conviction</span>
-              runs the same fractal pipeline on any US ticker you enter — not just the Kerry lists. The result
-              renders as an amber-highlighted row at the top of the table with the identical column layout, so
-              you can compare your own watchlist names against Kerry's lists side-by-side. The
-              <span class="mono">Get AI take</span> button works on custom rows too. Click <em>Clear</em> in the
-              row to remove it.
+              Some days the table will have very few BUY ratings. <strong>This is information, not a
+              failure.</strong> The model only fires BUY when four things line up at once:
+              direction is bullish, price is above the 62-day and 200-day moving averages, the price
+              action confirms a real trend (not random walk), and the price is at a favorable entry
+              point. On days when the market is choppy, stretched, or breaking down, very few stocks
+              clear all four gates. The right move is often to wait. Patience is a feature.
+            </p>
+            <p class="mt-2">
+              Use the <strong>DIP</strong> column as your watch list — those stocks are setting up but
+              haven't confirmed yet. Tomorrow's scan might turn some of them into BUYs.
             </p>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">Why the AI Take sometimes disagrees with the columns</h2>
-            <p class="mb-2">
-              The 15-Day, 62-Day, Prediction, and Conviction columns are produced by <strong>deterministic
-              rules</strong> — point sums over a fixed rubric. The <span class="mono font-semibold">AI Take</span>
-              panel is generated by Claude reading the same raw data and writing its own interpretation. The system
-              prompt explicitly asks the AI to "predict the next break: thrust up, cascade down, or consolidation,"
-              meaning it can override the rules when the evidence warrants.
-            </p>
-            <p class="mb-2">
-              The two usually agree. When they don't, that's information: the deterministic call hit a borderline
-              threshold or weighed signals differently than a holistic reader would. The "Get AI take" button is
-              designed for exactly these cases — fast screening with the rules, deep inspection with the AI.
-            </p>
-            <p class="text-slate-600">
-              Cost guardrail: each click runs Claude only if the cached answer is older than 24 hours, so the
-              theoretical worst case is one call per symbol per day (~$1.30 for the full Kerry list if you really
-              touched every stock). The "Refresh" link in the panel forces a fresh call for that one symbol.
-            </p>
-          </section>
-
-          <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">The Conviction score — what the button does</h2>
-            <p class="mb-3">
-              The <span class="mono font-semibold">Conviction</span> column and the
-              <span class="text-emerald-700 font-medium">★ Highest Conviction</span> button operationalize the
-              "look for agreement across columns" rule. Every row gets a single signed score that's high when all
-              the directional signals agree and pulls toward zero when they conflict. Sorting by it surfaces the
-              cleanest setups in either direction without you having to scan column-by-column.
-            </p>
-
-            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">The rubric (computed per row at load time)</h3>
-            <div class="overflow-x-auto mb-3">
-              <table class="w-full text-sm border border-slate-200 rounded-md bg-white">
-                <thead class="bg-slate-100 text-xs uppercase tracking-wider text-slate-600">
-                  <tr>
-                    <th class="text-left px-3 py-2">Signal</th>
-                    <th class="text-left px-3 py-2">Contribution</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  <tr><td class="px-3 py-2 mono">15-Day direction</td><td class="px-3 py-2">±(15d Conf ÷ 100), so up to ±0.9</td></tr>
-                  <tr><td class="px-3 py-2 mono">62-Day direction</td><td class="px-3 py-2">±(62d Conf ÷ 100), so up to ±0.9</td></tr>
-                  <tr><td class="px-3 py-2 mono">Prediction</td><td class="px-3 py-2">Thrust Up: +(Pred Conf ÷ 100) · Cascade Down: −(Pred Conf ÷ 100) · Consolidation: 0 (but see CONSOLIDATION penalty below)</td></tr>
-                  <tr><td class="px-3 py-2 mono">Mood</td><td class="px-3 py-2">Euphoria +0.7 · Stealth Build +0.5 · Grind 0 · Panic −0.7</td></tr>
-                  <tr><td class="px-3 py-2 mono">CONSOLIDATION penalty</td><td class="px-3 py-2">If prediction is Consolidation AND the other signals are leaning directional (|s| &gt; 1.0), subtract 0.3 toward neutral. The engine is literally saying "no breakout."</td></tr>
-                  <tr><td class="px-3 py-2 mono">Horizon disagreement</td><td class="px-3 py-2">If 15-day and 62-day point opposite directions, multiply the running score by 0.7 — the model is split, conviction shouldn't read high.</td></tr>
-                  <tr><td class="px-3 py-2 mono">Hurst quality</td><td class="px-3 py-2">H &gt; 0.6 with directional signals: +0.3 (genuinely persistent trend). H ≈ 0.5 with strong signals: −0.3 (random-walk territory, direction isn't structurally supported).</td></tr>
-                  <tr><td class="px-3 py-2 mono">Box dim (D)</td><td class="px-3 py-2">Smoothness × tanh(s) × 2 — continuous amplification through zero. Up to ±1.0 for clean paths (D ≈ 1.0).</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="mb-3 text-slate-600">
-              Total range works out to roughly <span class="mono">−4.4</span> … <span class="mono">+4.4</span>.
-              Confidence-weighting means a 90%-confident bullish signal counts more than a 55%-confident one, and
-              a chaotic price path (high D) won't artificially amplify a marginal call.
-            </p>
-
-            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">Color coding</h3>
-            <ul class="space-y-1 mb-3 ml-1">
-              <li><span class="mono font-semibold text-emerald-700">≥ +2.5</span> bold green — high-conviction bullish setup</li>
-              <li><span class="mono text-emerald-600">+1.0 to +2.5</span> green — moderate bullish lean</li>
-              <li><span class="mono text-slate-500">−1.0 to +1.0</span> slate — signals disagree, low conviction</li>
-              <li><span class="mono text-red-600">−2.5 to −1.0</span> red — moderate bearish lean</li>
-              <li><span class="mono font-semibold text-red-700">≤ −2.5</span> bold red — high-conviction bearish setup</li>
-            </ul>
-
-            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">Two ways to sort by it</h3>
-            <ul class="list-disc ml-5 space-y-1.5 mb-3">
-              <li>Click the <span class="text-emerald-700 font-medium">★ Highest Conviction</span> button.
-                First click sorts descending (top-bullish at the top); click again to flip ascending (top-bearish
-                at the top). Same button covers both screens.</li>
-              <li>Or click the <span class="mono">Conviction</span> column header directly — same behavior, plus
-                it stays consistent with how every other column sorts.</li>
-            </ul>
-
-            <h3 class="text-sm font-semibold text-slate-800 mt-4 mb-2">How to interpret the number</h3>
-            <ul class="list-disc ml-5 space-y-1.5">
-              <li><strong>+3.5 or higher</strong> — near-unanimous bullish signals on a smooth path. The model's
-                idea of a "high-conviction long" setup.</li>
-              <li><strong>−3.5 or lower</strong> — near-unanimous bearish signals on a smooth decline. The model's
-                "high-conviction short" call, or at minimum a strong "do not own here" signal.</li>
-              <li><strong>Between −1 and +1</strong> — signals are split. The model can't pick a side; treat as
-                noise unless you have an independent reason to be involved.</li>
-              <li>The score is recomputed every time the page loads from the latest scan data, so it always
-                reflects the most recent cron run.</li>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">The other columns at a glance</h2>
+            <ul class="space-y-1.5 ml-1">
+              <li><strong>Symbol</strong>: the ticker.</li>
+              <li><strong>List</strong>: which list this stock came from (Tell Sheet, Watchlist, BUS Research, or Custom if you typed it in).</li>
+              <li><strong>Price</strong>: most recent daily close.</li>
+              <li><strong>Why</strong>: plain-English explanation of the Rating in one sentence.</li>
+              <li><strong>Mood</strong>: market psychology read for this stock. <em>Euphoria</em> = trending up; <em>Panic</em> = breaking down; <em>Stealth Build</em> = quiet accumulation (often a precursor to a move higher); <em>Grind</em> = no edge.</li>
+              <li><strong>AI Take</strong>: click to run Claude on this single stock. Opens a detailed narrative under the row.</li>
             </ul>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">How to use the table</h2>
-            <ul class="list-disc ml-5 space-y-1.5">
-              <li>Click any column header to sort. Numeric columns sort descending by default; click again to flip.</li>
-              <li>Use the <strong>Tell Sheet</strong> / <strong>Watchlist</strong> pills to filter to one list, or type a symbol in the search box.</li>
-              <li>Look for <em>agreement</em> across columns: a stock with bullish 15-day + bullish 62-day + Thrust Up + Euphoria + low D is a much higher-conviction setup than one where the signals disagree.</li>
-              <li>Be cautious of <em>divergences</em>: bullish horizons with a Cascade Down prediction (or vice-versa) means the longer trend and the near-term micro-structure are pulling in opposite directions — the prediction tends to lead in the short term.</li>
-              <li>This is one model's read on a snapshot of price data. It is not investment advice. Use it as a screening layer, not a decision rule.</li>
-            </ul>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">For the curious: how the engine actually decides</h2>
+            <p>
+              Behind the Rating, the engine combines four signals. You don't need to read this section to
+              use the page — but if you're curious why a stock got the call it did, here's the logic:
+            </p>
+            <ol class="list-decimal ml-5 space-y-1.5 mt-2">
+              <li><strong>Direction</strong> (the "Conviction" score in Detailed view): is the stock
+                trending up or down across short, medium, and long term?</li>
+              <li><strong>Trend strength</strong>: is the price above the 62-day moving average (medium-
+                term support) and above the 200-day (long-term support)? <em>Nothing good happens below
+                the 200-day.</em> A break below it triggers SELL automatically.</li>
+              <li><strong>Real trend vs. noise</strong>: the engine checks the price's mathematical
+                "fingerprint" — does it persist in one direction (Hurst), does it follow a smooth path
+                (Box dimension), and is the volatility uniform (Lacunarity)? If yes to all three, the
+                trend is "confirmed." If no, the stock is just bouncing around and doesn't deserve a BUY
+                even if the directional signals look bullish.</li>
+              <li><strong>Entry price</strong> (the Risk Range): given recent volatility, what's a
+                reasonable trading range over the next ~15 days? You buy near the low end, trim near the
+                high end.</li>
+            </ol>
+            <p class="mt-3">
+              All four must align for a BUY. Toggle to <strong>Detailed view</strong> at the top of the
+              page if you want to see every input column the engine uses. None of it is necessary for
+              following the Rating, but it's there for transparency.
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Important reminder</h2>
+            <p>
+              This page is an educational and screening tool. It's one model's read on a snapshot of
+              price data. It is not investment advice. Use it as a starting point for your own
+              research and decision-making, not as a substitute for it.
+            </p>
           </section>
         </div>
       </div>
