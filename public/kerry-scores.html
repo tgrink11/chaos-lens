@@ -77,6 +77,14 @@
               That answer is the <strong>Rating</strong> column, and it's the only column you need to
               read to use this page well. Everything else exists to explain or back up the Rating.
             </p>
+            <p class="mt-3 text-slate-600">
+              <strong>One score, not five.</strong> If you toggle to Detailed view you'll see other
+              named scores — Conviction, Setup, Mood, Hurst, and so on. <em>Those are inputs that the
+              Rating already absorbed when it was computed.</em> They are not separate recommendations
+              that compete with the Rating. The Rating is the synthesis; everything else is the
+              ingredient list. If they ever look like they disagree, trust the Rating — it has the
+              final word because it sees all the inputs together.
+            </p>
           </section>
 
           <section>
@@ -154,7 +162,6 @@
               <li><strong>List</strong>: which list this stock came from (Tell Sheet, Watchlist, BUS Research, or Custom if you typed it in).</li>
               <li><strong>Price</strong>: most recent daily close.</li>
               <li><strong>Why</strong>: plain-English explanation of the Rating in one sentence.</li>
-              <li><strong>Mood</strong>: market psychology read for this stock. <em>Euphoria</em> = trending up; <em>Panic</em> = breaking down; <em>Stealth Build</em> = quiet accumulation (often a precursor to a move higher); <em>Grind</em> = no edge.</li>
               <li><strong>AI Take</strong>: click to run Claude on this single stock. Opens a detailed narrative under the row.</li>
             </ul>
           </section>
@@ -269,7 +276,7 @@
               <th class="sortable px-2 py-2.5 text-center detail-only" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR=low (buy zone) – TRR=top (sell zone). Marker shows where today's close sits. Click to sort by position-in-band (low = best entry).">Risk Range<span class="sort-arrow"></span></th>
               <th class="px-2 py-2.5 text-center detail-only" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
               <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="mood">Mood<span class="sort-arrow"></span></th>
+              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="mood">Mood<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="hurst">H<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="box_dim">D<span class="sort-arrow"></span></th>
               <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
@@ -689,7 +696,7 @@
             <td class="px-2 py-2 text-center detail-only">${riskRangeCellHtml(r)}</td>
             <td class="px-2 py-2 text-center detail-only">${trendCellHtml(r)}</td>
             <td class="px-2 py-2 detail-only">${setupBadgeHtml(r.setup)}</td>
-            <td class="px-2 py-2 text-xs font-medium ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
+            <td class="px-2 py-2 text-xs font-medium detail-only ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
             <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
             <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
             <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
