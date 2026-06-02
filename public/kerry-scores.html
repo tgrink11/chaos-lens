@@ -58,9 +58,22 @@
             </svg>
             Watch walkthrough
           </a>
-          <div class="text-xs text-slate-500 mono text-right ml-2">
-            <div>Last scanned: <span id="last-scanned" class="text-slate-700">—</span></div>
-            <div>Total symbols: <span id="row-count" class="text-slate-700">—</span></div>
+          <!-- Data-freshness banner. The Rating column reflects the most
+               recent overnight scan; this surfaces that fact so subscribers
+               don't mistake yesterday's close-based Rating for an intraday
+               read. The "Stale" warning appears when the scan is >36h old
+               (covers a missed cron run; normal weekday gap is <24h, weekend
+               gap is up to ~72h Sunday→Monday). -->
+          <div class="text-right ml-2 mono leading-tight">
+            <div class="text-[11px] uppercase tracking-wide text-slate-500">Rating column reflects</div>
+            <div class="text-sm font-semibold text-slate-800" id="last-scanned-label">—</div>
+            <div class="text-xs text-slate-500 mt-0.5">
+              <span id="last-scanned">—</span>
+              · <span id="row-count" class="text-slate-700">—</span> symbols
+            </div>
+            <div id="staleness-warning" class="hidden mt-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 inline-block">
+              Data is older than usual — next scan ~22:00 UTC weekdays
+            </div>
           </div>
         </div>
       </div>
@@ -311,6 +324,8 @@
         tableWrap: $('#table-wrap'),
         rows: $('#rows'),
         lastScanned: $('#last-scanned'),
+        lastScannedLabel: $('#last-scanned-label'),
+        stalenessWarning: $('#staleness-warning'),
         rowCount: $('#row-count'),
         search: $('#search'),
       };
@@ -656,12 +671,25 @@
         const rowAttrs = isCustom
           ? ' class="bg-amber-50/50 border-l-4 border-amber-400"'
           : '';
+        // Two buttons per row:
+        //   - "Get AI take" — normal path, will serve a cached take if one
+        //     exists and is still valid (24h TTL + scan-aware invalidation)
+        //   - "Pull fresh" — bypass cache, force a Claude regeneration
+        //     against the latest FMP bar. For active traders who want
+        //     intraday-ish refreshes; costs one Claude call each click.
+        // The fresh button is visually subordinate (xs, slate) so the
+        // default action remains the cheap one.
         const aiTakeCell = isCustom
           ? `<button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>
-             <div class="mt-1">
+             <div class="mt-1 flex gap-2 items-center">
+               <button class="ai-take-fresh-btn text-xs text-slate-500 hover:text-blue-700" data-symbol="${r.symbol}" title="Bypass cache and pull a fresh Claude analysis against the latest FMP bar">Pull fresh</button>
+               <span class="text-xs text-slate-300">·</span>
                <button class="custom-clear-btn text-xs text-slate-400 hover:text-red-600">Clear</button>
              </div>`
-          : `<button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>`;
+          : `<button class="ai-take-btn text-blue-600 hover:underline" data-symbol="${r.symbol}">Get AI take</button>
+             <div class="mt-1">
+               <button class="ai-take-fresh-btn text-xs text-slate-500 hover:text-blue-700" data-symbol="${r.symbol}" title="Bypass cache and pull a fresh Claude analysis against the latest FMP bar">Pull fresh</button>
+             </div>`;
 
         // Conviction score is computed on the fly so we never have to migrate
         // schemas when the scoring rubric changes.
@@ -1054,7 +1082,16 @@
           const data = await fetchAITake(symbol, refresh);
           const rendered = renderMarkdown(data.text || '');
           const generated = data.generatedAt ? new Date(data.generatedAt).toLocaleString() : '';
-          const footer = `${data.cached ? 'Cached' : 'Fresh'} · ${escapeHtml(data.model || 'Claude')} · ${escapeHtml(generated)}
+          // Footer surfaces both timestamps the subscriber cares about:
+          //   - Data as of: the trading-day close the analysis was built
+          //     against (the real "age" of the inputs)
+          //   - Generated: when Claude actually wrote the text (separate
+          //     question — could be hours later if cron pre-warmed, or
+          //     could be right now if just regenerated)
+          const dataAsOfPiece = data.dataAsOfLabel
+            ? `<span class="font-semibold text-slate-700">Data as of ${escapeHtml(data.dataAsOfLabel)} close</span> · `
+            : '';
+          const footer = `${dataAsOfPiece}${data.cached ? 'Cached' : 'Fresh'} · ${escapeHtml(data.model || 'Claude')} · generated ${escapeHtml(generated)}
             · <a href="#" class="ai-take-refresh text-blue-600 hover:underline" data-symbol="${escapeHtml(symbol)}">Refresh</a>`;
           setExpansionContent(expansionRow, rendered, footer);
           setButtonState(symbol, 'open');
@@ -1096,6 +1133,22 @@
           const expansion = buildExpansion(symbol, '', '');
           dataRow.after(expansion);
           loadAITake(symbol, expansion, false);
+          return;
+        }
+
+        // "Pull fresh" button — force a refresh (refresh=true on the API
+        // call). If there's no expansion row open, create one; if there
+        // is, reuse it and replace the content with the fresh response.
+        const freshBtn = event.target.closest('button.ai-take-fresh-btn');
+        if (freshBtn) {
+          const symbol = freshBtn.dataset.symbol;
+          const dataRow = freshBtn.closest('tr');
+          let expansion = document.querySelector(`tr[data-expansion="${symbol}"]`);
+          if (!expansion) {
+            expansion = buildExpansion(symbol, '', '');
+            dataRow.after(expansion);
+          }
+          loadAITake(symbol, expansion, true);
           return;
         }
         const closeBtn = event.target.closest('button.ai-take-close');
@@ -1147,9 +1200,32 @@
             return enriched;
           });
           attachPercentiles(allScores);
-          els.lastScanned.textContent = data.lastScanned
-            ? new Date(data.lastScanned).toLocaleString()
-            : '—';
+          // Header freshness banner. The big bold "Rating column reflects"
+          // line shows the close date (e.g. "Mon, Jun 1, 2026 close"),
+          // since that's the bar the Rating was synthesized from. The
+          // smaller subline shows the exact scan timestamp. If the gap
+          // between the scan and "now" exceeds ~36h, surface a warning
+          // chip so subscribers know the data hasn't refreshed on
+          // schedule (normal weekday gap is <24h; weekend gap up to ~72h
+          // for Sunday → Monday, which we don't warn on since cron
+          // schedule of 1-5 weekdays explicitly skips Sat/Sun).
+          if (data.lastScanned) {
+            const scanDate = new Date(data.lastScanned);
+            els.lastScannedLabel.textContent = scanDate.toLocaleDateString('en-US', {
+              weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+            }) + ' close';
+            els.lastScanned.textContent = `Scanned ${scanDate.toLocaleString('en-US', {
+              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            })}`;
+            const ageHrs = (Date.now() - scanDate.getTime()) / 3600000;
+            const dayOfWeek = new Date().getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const isWeekendCatchUp = dayOfWeek === 1 && ageHrs < 80; // Mon, <~3.3d
+            const stale = ageHrs > 36 && !isWeekendCatchUp;
+            els.stalenessWarning.classList.toggle('hidden', !stale);
+          } else {
+            els.lastScannedLabel.textContent = 'no scan yet';
+            els.lastScanned.textContent = '—';
+          }
           els.rowCount.textContent = String(allScores.length);
           els.status.classList.add('hidden');
           els.tableWrap.classList.remove('hidden');

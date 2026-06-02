@@ -87,16 +87,26 @@ alter table kerry_scores add primary key (symbol, list_type);
 ### 1b. AI-take cache table
 
 Powers the "Get AI take" button on the standalone page. Runs Claude on
-a single Kerry-list ticker on demand and caches the answer for 24 hours
-so repeat clicks the same day are free.
+a single Kerry-list ticker on demand and caches the answer until either
+24 hours pass *or* a fresh kerry_scores scan lands (whichever happens
+first). `data_as_of` records the most recent FMP bar date the take was
+built against — used both for scan-aware cache invalidation and for the
+"Data as of: …" stamp shown in the UI footer.
 
 ```sql
 create table ai_takes (
   symbol text primary key,
   text text not null,
   model text,
-  generated_at timestamptz not null default now()
+  generated_at timestamptz not null default now(),
+  data_as_of date
 );
+```
+
+If the table already exists from a prior deploy, just add the new column:
+
+```sql
+alter table ai_takes add column if not exists data_as_of date;
 ```
 
 No RLS needed (same reasoning as `kerry_scores`).

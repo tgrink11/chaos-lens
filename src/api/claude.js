@@ -30,7 +30,16 @@ In that section:
 - Keep it to 2-4 sentences; sharp and actionable, not a disclaimer
 
 The 10th Man section is not optional. Skip it and the analysis is
-incomplete.`;
+incomplete.
+
+Data-as-of rule (CONDITIONAL):
+IF the prompt begins with a "DATA AS OF:" block, the FIRST line of your
+analysis MUST be an italicized stamp naming that exact date. Format:
+"*Data as of: [the date from the DATA AS OF block] close.*"
+Then a blank line, then the analysis. This tells subscribers exactly
+which trading session the read covers so they don't confuse it with
+intraday or real-time data. If no DATA AS OF block is present, skip
+this — don't invent a date.`;
 
 /**
  * Format peer-context block showing where this stock's fractal metrics
@@ -63,9 +72,18 @@ function formatPopulationContext(primary, stats) {
 /**
  * Build the analysis prompt from computed metrics
  */
-export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating) {
+export function buildPrompt(symbol, assetType, fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating, dataAsOf) {
   const p = fractalResults?.primary;
   if (!p) return `Analyze ${symbol} — insufficient data for fractal analysis.`;
+
+  // Data-as-of stamp. The most recent bar date is computed in the caller
+  // (api/ai-take.js) from the FMP response and passed in as YYYY-MM-DD.
+  // Phrasing the date in the prompt body (not a system meta-field) is
+  // what gets Claude to actually surface it as the first line of the
+  // narrative — see the SYSTEM_PROMPT "Data-as-of rule" section.
+  const dataAsOfBlock = dataAsOf
+    ? `DATA AS OF: ${dataAsOf} (most recent FMP daily close)\n\n`
+    : '';
 
   const timeframes = [];
   if (fractalResults.daily) {
@@ -83,7 +101,7 @@ export function buildPrompt(symbol, assetType, fractalResults, behavioralResults
 
   const selfSim = fractalResults.selfSimilarity;
 
-  let prompt = `FRACTAL ANALYSIS: ${symbol} (${assetType.toUpperCase()})
+  let prompt = `${dataAsOfBlock}FRACTAL ANALYSIS: ${symbol} (${assetType.toUpperCase()})
 
 FRACTAL METRICS BY TIMEFRAME:
 ${timeframes.join('\n')}

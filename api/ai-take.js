@@ -86,6 +86,21 @@ async function fetchDailyOHLCV(symbol) {
   };
 }
 
+// Format a YYYY-MM-DD ISO date as the human-readable string the prompt
+// expects ("Mon, Jun 1, 2026"). Parsing as YYYY-MM-DDT00:00:00Z keeps
+// the date stable regardless of the server's local timezone — without
+// the explicit Z the JS Date constructor would interpret it in the
+// server's local zone and a 2026-06-01 string could roll to May 31.
+function formatBarDate(yyyyMmDd) {
+  if (!yyyyMmDd) return null;
+  const d = new Date(`${yyyyMmDd}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return yyyyMmDd;
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 async function callClaude(prompt, host) {
   // Hit our own /api/analyze for retry+fallback logic in one place.
   const base = host ? `https://${host}` : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://chaos-lens.vercel.app');
@@ -165,6 +180,25 @@ async function readCache(symbol) {
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
+// Look up the latest scanned_at on the kerry_scores row for this symbol.
+// Returns the ISO timestamp, or null if no row exists (custom ticker not
+// on any Kerry list). Used to invalidate cached takes when a newer scan
+// has landed — solves the "AI Take feels days stale" problem where the
+// 24h TTL outlives a fresh scan.
+async function fetchLastScanISO(symbol) {
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/kerry_scores?symbol=eq.${symbol}&select=scanned_at&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!resp.ok) return null;
+    const rows = await resp.json().catch(() => []);
+    return Array.isArray(rows) && rows[0]?.scanned_at ? rows[0].scanned_at : null;
+  } catch {
+    return null;
+  }
+}
+
 async function writeCache(row) {
   await fetch(`${SUPABASE_URL}/rest/v1/ai_takes`, {
     method: 'POST',
@@ -200,19 +234,35 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'invalid symbol' });
   }
 
-  // Cache check
+  // Cache check. Two gates must both pass for a cache hit:
+  //   (1) Age < 24h (the original TTL — catches stale-by-time)
+  //   (2) Cache was written AFTER the latest kerry_scores scan for this
+  //       symbol (catches stale-by-data: a fresh nightly scan invalidates
+  //       any take generated against the prior day's snapshot, even if
+  //       the take itself is only a few hours old)
+  // For custom tickers with no kerry_scores row, gate (2) is skipped —
+  // those takes rely purely on the 24h TTL since there's no scan to
+  // compare against.
   if (!refresh) {
     const cached = await readCache(symbol);
     if (cached?.text) {
-      const age = Date.now() - new Date(cached.generated_at).getTime();
+      const cacheTimeMs = new Date(cached.generated_at).getTime();
+      const age = Date.now() - cacheTimeMs;
       if (age < CACHE_TTL_MS) {
-        return res.status(200).json({
-          symbol,
-          text: cached.text,
-          model: cached.model,
-          generatedAt: cached.generated_at,
-          cached: true,
-        });
+        const lastScanISO = await fetchLastScanISO(symbol);
+        const scanIsNewer = lastScanISO
+          && new Date(lastScanISO).getTime() > cacheTimeMs;
+        if (!scanIsNewer) {
+          return res.status(200).json({
+            symbol,
+            text: cached.text,
+            model: cached.model,
+            generatedAt: cached.generated_at,
+            dataAsOf: cached.data_as_of || null,
+            dataAsOfLabel: cached.data_as_of ? formatBarDate(cached.data_as_of) : null,
+            cached: true,
+          });
+        }
       }
     }
   }
@@ -300,8 +350,15 @@ export default async function handler(req, res) {
     vol_ratio: riskRange?.vol_ratio,
   });
 
+  // Data-as-of: the most recent trading-day close in the FMP feed. This
+  // is the *real* age of the analysis — surfaced both to Claude (which
+  // leads the take with it) and back to the caller (so the UI footer
+  // can display it alongside the generation timestamp).
+  const lastBarISO = daily.date[daily.date.length - 1] || null;
+  const dataAsOf = formatBarDate(lastBarISO);
+
   const prompt = buildPrompt(
-    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating
+    symbol, 'stock', fractalResults, behavioralResults, moodResult, predictionResult, analogResults, trendResult, populationStats, riskRange, rating, dataAsOf
   );
 
   let claudeResp;
@@ -321,6 +378,7 @@ export default async function handler(req, res) {
     text: claudeResp.text,
     model: claudeResp.model || null,
     generated_at: generatedAt,
+    data_as_of: lastBarISO,
   });
 
   return res.status(200).json({
@@ -328,6 +386,8 @@ export default async function handler(req, res) {
     text: claudeResp.text,
     model: claudeResp.model,
     generatedAt,
+    dataAsOf: lastBarISO,
+    dataAsOfLabel: dataAsOf,
     cached: false,
   });
 }
