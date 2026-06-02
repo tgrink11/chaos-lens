@@ -208,6 +208,29 @@
           </section>
 
           <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">⚡ The Intraday overlay button</h2>
+            <p>
+              The Rating column reflects the most recent <em>end-of-day close</em> — that's what the
+              engine uses, and what the model is designed for. During the trading day, you can click
+              the <strong>⚡ Intraday overlay</strong> button to pull live prices and see whether
+              today's intraday action has moved any stock past its band boundaries.
+            </p>
+            <p class="mt-2">
+              Important: the fractals, the SMAs, and the band boundaries themselves do <strong>not</strong>
+              change intraday — those are EOD-only quantities. What changes is <em>where today's live
+              price sits inside yesterday's band</em>. If a stock gapped up past TRR (top of band),
+              the Rating can flip from HOLD to TRIM, or TRIM to SELL. If it dropped to LRR (bottom of
+              band), it can flip toward BUY. When the intraday read differs from the EOD read, the
+              row shows both side by side with a purple arrow between them.
+            </p>
+            <p class="mt-2 text-slate-600">
+              This is a discretionary overlay, not a replacement for the EOD read. The model's edge
+              comes from filtering out intraday noise. Use the overlay when you're actively watching a
+              name during the session — not as a permanent state.
+            </p>
+          </section>
+
+          <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">Important reminder</h2>
             <p>
               This page is an educational and screening tool. It's one model's read on a snapshot of
@@ -242,6 +265,15 @@
         <div class="w-px h-6 bg-slate-300 mx-1"></div>
         <button id="sort-conviction" class="px-3 py-1.5 text-sm rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors" title="Sort by composite conviction score: most-bullish at top, most-bearish at bottom">
           ★ Highest Conviction
+        </button>
+        <!-- Intraday overlay: one click pulls live FMP quotes for all
+             visible symbols and recomputes range_pos + Rating using
+             today's price against yesterday's band. Tells subscribers
+             whether intraday action has moved a stock past LRR/TRR. -->
+        <button id="intraday-overlay-btn"
+                class="px-3 py-1.5 text-sm rounded-full border border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100 transition-colors"
+                title="Pull live FMP quotes and overlay intraday Rating on top of the EOD scan. When today's price has crossed a band boundary, the Rating may differ from the EOD column.">
+          ⚡ Intraday overlay
         </button>
         <div class="w-px h-6 bg-slate-300 mx-1"></div>
         <form id="custom-analyze-form" class="flex items-center gap-1" autocomplete="off">
@@ -620,7 +652,40 @@
         if (!rating) return '<span class="text-slate-400 text-xs">—</span>';
         const cfg = RATING_CONFIG_UI[rating] || RATING_CONFIG_UI.HOLD;
         const reason = (r._ratingReason || '').replace(/"/g, '&quot;');
-        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${reason}">${rating}</span>`;
+        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${reason}">${rating}</span>`;
+
+        // Intraday overlay: when r._intradayRating is set (populated by
+        // the Intraday overlay button), render a second badge below the
+        // EOD one. Visual cue when the two differ: an arrow + the
+        // intraday badge styled with its own color. The "Why" tooltip
+        // surfaces the live price and updated range position.
+        if (r._intradayRating && r._intradayPrice != null) {
+          const iRating = r._intradayRating;
+          const iCfg = RATING_CONFIG_UI[iRating] || RATING_CONFIG_UI.HOLD;
+          const iReason = (r._intradayRatingReason || '').replace(/"/g, '&quot;');
+          const priceTxt = `$${r._intradayPrice.toFixed(2)}`;
+          const changeTxt = r._intradayChangePct != null
+            ? ` (${r._intradayChangePct >= 0 ? '+' : ''}${r._intradayChangePct.toFixed(2)}%)`
+            : '';
+          const differs = iRating !== rating;
+          const arrow = differs ? '→' : '·';
+          const containerCls = differs
+            ? 'flex flex-col items-center gap-0.5'
+            : 'flex flex-col items-center gap-0.5 opacity-80';
+          return `
+            <div class="${containerCls}">
+              <div class="flex items-center gap-1">
+                <span class="text-[9px] uppercase tracking-wide text-slate-400">EOD</span>
+                ${eodBadge}
+              </div>
+              <div class="flex items-center gap-1" title="${iReason}">
+                <span class="text-[9px] uppercase tracking-wide ${differs ? 'text-purple-700 font-semibold' : 'text-slate-400'}">${arrow} Live ${priceTxt}${changeTxt}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${iCfg.cls}">${iRating}</span>
+              </div>
+            </div>
+          `;
+        }
+        return eodBadge;
       }
 
       // Risk Range visualization: horizontal band with a price marker.
@@ -905,6 +970,114 @@
         }
         render();
       });
+
+      // ---------- Intraday overlay ----------
+      //
+      // Pull live FMP quotes for all Kerry-list symbols in one batch, then
+      // for each row replace `price` with the live quote, recompute
+      // range_pos against the row's existing band, and re-run computeRating.
+      // The result is attached to the row as _intradayPrice / _intradayRating
+      // and rendered alongside the EOD Rating so subscribers see both.
+      //
+      // Important: the band bounds (lrr/trr), fractals (H/D/Λ), and SMAs
+      // do NOT update intraday. Those are EOD-only quantities. The overlay
+      // is purely "where is today's live price within yesterday's band."
+      // If the price has moved past TRR, the model now reads SELL; if it
+      // gapped down to LRR, the read may flip to BUY — without changing
+      // any of the underlying trend/fractal verdicts. The 9-day EMA the
+      // band is centered on is a daily quantity so it doesn't drift
+      // intraday either.
+      //
+      // Cost: 1-2 FMP /stable/quote batch calls per click (~130 symbols
+      // → 2 calls at 90/batch). No Claude calls, no Supabase writes.
+      const intradayBtn = document.getElementById('intraday-overlay-btn');
+      let intradayState = 'idle'; // 'idle' | 'loading' | 'on'
+
+      function recomputeIntradayRating(row, livePrice) {
+        // Build a shallow clone with price swapped, then recompute
+        // range_pos in-place and re-run computeRating. The rating-logic
+        // module already handles missing lrr/trr (custom rows etc.)
+        // gracefully — null range_pos disables range-dependent branches.
+        const overlay = { ...row, price: livePrice };
+        if (Number.isFinite(row.lrr) && Number.isFinite(row.trr) && row.trr > row.lrr) {
+          overlay.range_pos = Math.max(0, Math.min(1.2, (livePrice - row.lrr) / (row.trr - row.lrr)));
+        }
+        // _conviction is direction-only and uses fractals/horizons, all
+        // of which are EOD inputs — no need to recompute it.
+        overlay._conviction = row._conviction;
+        const r = computeRating(overlay);
+        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, range_pos: overlay.range_pos };
+      }
+
+      async function applyIntradayOverlay() {
+        if (intradayState === 'loading') return;
+        // Toggle off: clear all overlay fields and re-render.
+        if (intradayState === 'on') {
+          for (const r of allScores) {
+            delete r._intradayPrice;
+            delete r._intradayChangePct;
+            delete r._intradayRating;
+            delete r._intradayRatingReason;
+            delete r._intradayRangePos;
+          }
+          intradayState = 'idle';
+          intradayBtn.textContent = '⚡ Intraday overlay';
+          intradayBtn.classList.remove('bg-purple-200');
+          intradayBtn.classList.add('bg-purple-50');
+          render();
+          return;
+        }
+
+        intradayState = 'loading';
+        intradayBtn.textContent = '⚡ Pulling quotes…';
+        intradayBtn.disabled = true;
+
+        try {
+          // Build the comma-separated symbol list from the currently-
+          // loaded rows (excludes filter; the overlay applies globally
+          // so the user can toggle filters after without re-fetching).
+          const symbols = [...new Set(allScores.map(r => r.symbol).filter(Boolean))];
+          if (symbols.length === 0) throw new Error('no symbols loaded');
+          const url = `/api/intraday-quotes?symbols=${encodeURIComponent(symbols.join(','))}`;
+          const resp = await fetch(url, { cache: 'no-store' });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+
+          // Build a quick symbol → quote map. FMP doesn't guarantee
+          // return order matches input order, so key by symbol.
+          const bySymbol = new Map();
+          for (const q of (data.quotes || [])) {
+            if (q?.symbol && Number.isFinite(q?.price)) bySymbol.set(q.symbol, q);
+          }
+
+          // Attach overlay fields to each row.
+          for (const r of allScores) {
+            const q = bySymbol.get(r.symbol);
+            if (!q) continue;
+            r._intradayPrice = q.price;
+            r._intradayChangePct = q.changesPercentage;
+            const { rating, reason, range_pos } = recomputeIntradayRating(r, q.price);
+            r._intradayRating = rating;
+            r._intradayRatingReason = `Live ${r.symbol} $${q.price.toFixed(2)} → range_pos ${range_pos != null ? range_pos.toFixed(2) : 'n/a'}. ${reason}`;
+            r._intradayRangePos = range_pos;
+          }
+
+          intradayState = 'on';
+          intradayBtn.textContent = `⚡ Intraday ON (${bySymbol.size}/${symbols.length})`;
+          intradayBtn.classList.add('bg-purple-200');
+          intradayBtn.classList.remove('bg-purple-50');
+          render();
+        } catch (e) {
+          intradayState = 'idle';
+          intradayBtn.textContent = `⚡ Intraday failed: ${e.message}`;
+          // Auto-reset the label after a few seconds so the user can retry.
+          setTimeout(() => { intradayBtn.textContent = '⚡ Intraday overlay'; }, 4000);
+        } finally {
+          intradayBtn.disabled = false;
+        }
+      }
+
+      intradayBtn.addEventListener('click', applyIntradayOverlay);
 
       // ---------- Custom ticker analyzer ----------
       //
