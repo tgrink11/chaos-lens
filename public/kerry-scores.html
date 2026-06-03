@@ -173,6 +173,35 @@
           </section>
 
           <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">Rating modifiers (the lowercase tag after the Rating)</h2>
+            <p class="mb-2">
+              The Rating tells you the structural state. But sometimes there's a timing or extension
+              nuance you need to see at a glance. When applicable, the badge shows a lowercase tag
+              after an em-dash (e.g. <em>"ACCUMULATING — blow-off · pulling back"</em>).
+            </p>
+            <ul class="ml-5 space-y-1.5 list-disc">
+              <li><strong>extended</strong> — price is 30–60% above the 200-day SMA. The structural
+                Rating still stands but the move is stretched; this isn't a good entry, wait for a
+                pullback.</li>
+              <li><strong>blow-off</strong> — price is &gt;60% above the 200-day SMA. Parabolic /
+                vertical move. Gravity wins from here. Strongly avoid initiating; consider scaling
+                back if you own it.</li>
+              <li><strong>pulling back</strong> — 15-day direction has turned bearish while 62-day
+                stays bullish. Classical pullback inside an uptrend. Don't chase; wait for the
+                pullback to stabilize.</li>
+              <li><strong>consolidating</strong> — 15-day direction is flat while 62-day stays
+                bullish. Digesting a recent move; watch for the next directional resolution.</li>
+              <li><strong>bouncing</strong> — 15-day flipped bullish against a bearish 62-day.
+                Counter-trend rally, not a confirmed reversal.</li>
+            </ul>
+            <p class="mt-3 text-slate-600">
+              Modifiers stack. <em>STRONG ACCUMULATION — blow-off · pulling back</em> means the
+              structural Rating is bullish, but the stock is parabolically extended AND currently
+              correcting. The exact opposite of a fresh entry signal.
+            </p>
+          </section>
+
+          <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">The Trading Range column</h2>
             <p>
               Separate from the Rating, the Trading Range column shows the probable 15-day price band
@@ -623,17 +652,25 @@
         return RATING_BADGE_CLS[rating] || 'bg-slate-100 text-slate-600';
       }
 
-      // Phase modifier — appended to the Rating label when the short-term
-      // direction diverges from the medium-term. Display the modifier only
-      // for non-ADVANCING phases (ADVANCING is the default state where
-      // 15d and 62d both point bullish, so no extra label is needed).
-      // The modifier renders in lowercase + smaller text so it reads as a
-      // qualifier of the Rating, not a competing label.
-      function phaseModifier(r) {
-        const phase = r._phase;
-        if (!phase || phase === 'ADVANCING') return '';
-        const txt = phase.toLowerCase();
-        return ` <span class="text-[9px] font-normal opacity-80">— ${txt}</span>`;
+      // Rating modifiers — appended to the Rating label. Two kinds:
+      //   - Extension (EXTENDED / BLOW-OFF): price far above 200-day SMA
+      //   - Phase (PULLING BACK / CONSOLIDATING / BOUNCING): short-term
+      //     momentum divergence from medium-term
+      // Extension comes first because it's the more important warning.
+      // When both apply (e.g. DELL: blow-off + pulling back), they stack
+      // separated by a middle dot.
+      function ratingModifiers(r) {
+        const parts = [];
+        if (r._extension === 'BLOW-OFF') {
+          parts.push('<span class="font-semibold">blow-off</span>');
+        } else if (r._extension === 'EXTENDED') {
+          parts.push('extended');
+        }
+        if (r._phase && r._phase !== 'ADVANCING') {
+          parts.push(r._phase.toLowerCase());
+        }
+        if (parts.length === 0) return '';
+        return ` <span class="text-[9px] font-normal opacity-80">— ${parts.join(' · ')}</span>`;
       }
 
       function ratingBadgeHtml(r) {
@@ -647,9 +684,9 @@
         // so subscribers can never mistake a stale Rating for a fresh one.
         if (r._isStale) {
           const staleReason = `STALE — last scored ${r._weekdaysOld} weekday(s) ago. Underlying market conditions have likely changed; do not trade on this Rating until it refreshes.`.replace(/"/g, '&quot;');
-          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}${phaseModifier(r)}</span>`;
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}${ratingModifiers(r)}</span>`;
         }
-        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}${phaseModifier(r)}</span>`;
+        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}${ratingModifiers(r)}</span>`;
 
         // Intraday overlay: when r._intradayRating is set (populated by
         // the Intraday overlay button), render a second badge below the
@@ -975,7 +1012,7 @@
         // of which are EOD inputs — no need to recompute it.
         overlay._conviction = row._conviction;
         const r = computeRating(overlay);
-        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, phase: r.phase, range_pos: overlay.range_pos };
+        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, phase: r.phase, extension: r.extension, range_pos: overlay.range_pos };
       }
 
       async function applyIntradayOverlay() {
@@ -1092,6 +1129,7 @@
           customRow._ratingReason = _rt.reason;
           customRow._subscriberReason = _rt.subscriberReason;
           customRow._phase = _rt.phase;
+          customRow._extension = _rt.extension;
           customRow._entryQuality = entryQuality(customRow);
           customStatus = 'idle';
           customError = null;
@@ -1373,6 +1411,7 @@
             enriched._ratingReason = rating.reason;
             enriched._subscriberReason = rating.subscriberReason;
             enriched._phase = rating.phase;
+            enriched._extension = rating.extension;
             enriched._entryQuality = entryQuality(enriched);
             return enriched;
           });

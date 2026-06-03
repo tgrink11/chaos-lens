@@ -52,6 +52,14 @@ export const RATING_CONFIG = {
   FRACTAL_H_MIN: 0.55,        // Hurst ≥ this = persistent (not random walk)
   FRACTAL_D_MAX: 1.20,        // Box dim ≤ this = smooth path (not chaotic)
   FRACTAL_LAMBDA_MAX: 1.25,   // Λ ≤ this = uniform vol (no extreme clustering)
+
+  // Price-extension thresholds (price vs SMA200). A stock can be
+  // structurally in STRONG ACCUMULATION territory but already extended
+  // so far above its long-term average that buying here is chasing the
+  // top. These thresholds add a modifier to the Rating so subscribers
+  // see the over-extension at a glance.
+  EXTENSION_WARN_PCT:    0.30,  // price > 30% above SMA200 = EXTENDED
+  EXTENSION_BLOWOFF_PCT: 0.60,  // price > 60% above SMA200 = BLOW-OFF
 };
 
 // Sort order: action urgency / bullishness. STRONG ACCUMULATION at top,
@@ -150,6 +158,35 @@ export function fractalConfirmation(r) {
 }
 
 /**
+ * Price-extension check — flags how far above the 200-day SMA the
+ * current price is. SMAs are trailing averages, so when a stock has
+ * a vertical run, the 200-day lags far behind. Beyond a point, the
+ * gap between price and 200-day SMA stops being "trend strength"
+ * and starts being "blow-off top, gravity will win."
+ *
+ *   < 30% above SMA200      null      (healthy trend, no modifier)
+ *   30-60% above             EXTENDED  (stretched — don't initiate here)
+ *   > 60% above              BLOW-OFF  (parabolic — strongly avoid initiating)
+ *
+ * Only meaningful for bullish-tier ratings (STRONG / TRENDING). For
+ * WATCH tier, by definition price is just above SMA200 so extension
+ * is small. For SPECULATIVE, price is below SMA200 so the calc is
+ * negative and the modifier doesn't apply.
+ *
+ * @param {{price:?number, sma_200:?number}} r
+ * @returns {'EXTENDED'|'BLOW-OFF'|null}
+ */
+export function priceExtension(r) {
+  if (!Number.isFinite(r.price) || !Number.isFinite(r.sma_200) || r.sma_200 <= 0) {
+    return null;
+  }
+  const pct = (r.price - r.sma_200) / r.sma_200;
+  if (pct >= RATING_CONFIG.EXTENSION_BLOWOFF_PCT) return 'BLOW-OFF';
+  if (pct >= RATING_CONFIG.EXTENSION_WARN_PCT) return 'EXTENDED';
+  return null;
+}
+
+/**
  * Momentum phase — short-term dynamic ON TOP OF the structural Rating.
  *
  * The Rating matrix (SMA tier × fractal confirmation) is STRUCTURAL —
@@ -239,6 +276,7 @@ export function computeRating(r) {
   const tier = smaTier(r);
   const conf = fractalConfirmation(r);
   const phase = momentumPhase(r);
+  const extension = priceExtension(r);
 
   // Insufficient data: we need at least a price + one SMA to produce
   // any tier, and one fractal value to produce any confirmation. If
@@ -249,6 +287,7 @@ export function computeRating(r) {
       tier,
       confirmation: conf,
       phase,
+      extension,
       reason: !tier ? 'no SMA reference (newly-listed or missing data)'
             : 'no fractal signature available',
       subscriberReason: 'Insufficient data to score this name yet — typically a newly-listed stock or one with gaps in its price history.',
@@ -256,13 +295,28 @@ export function computeRating(r) {
   }
 
   const rating = RATING_MATRIX[tier][conf];
-  const reason = `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}`;
-
-  // Phase-aware subscriber explanation: when a bullish-tier stock is
-  // pulling back or consolidating, append a sentence so subscribers
-  // see the timing nuance alongside the structural call.
-  let subscriberReason = SUBSCRIBER_REASONS[rating] || '';
   const isBullishTier = (tier === 'STRONG' || tier === 'TRENDING' || tier === 'WATCH');
+  // Extension only meaningful for bullish tiers. For SPECULATIVE
+  // (price < SMA200) the calc would be negative and priceExtension()
+  // already returns null. Below we just clip it for WATCH tier where
+  // the modifier doesn't add value (WATCH means price is just barely
+  // above 200d, can't really be extended).
+  const applyExtension = (tier === 'STRONG' || tier === 'TRENDING') ? extension : null;
+
+  const reason = `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}${applyExtension ? `, extension=${applyExtension}` : ''}`;
+
+  // Subscriber explanation: append timing and extension nuance so the
+  // tooltip reads the full picture.
+  let subscriberReason = SUBSCRIBER_REASONS[rating] || '';
+
+  // Extension warnings come first because they're a bigger deal —
+  // a blow-off rating is a "don't chase" signal regardless of phase.
+  if (applyExtension === 'BLOW-OFF') {
+    subscriberReason += ' Price is more than 60% above the 200-day moving average — this is parabolic / blow-off territory, and gravity historically wins from here. Strongly avoid initiating; if you own it, consider scaling back.';
+  } else if (applyExtension === 'EXTENDED') {
+    subscriberReason += ' Price is 30-60% above the 200-day moving average — stretched. The structural call is still bullish but this is not a good entry point; wait for a meaningful pullback.';
+  }
+
   if (isBullishTier && phase === 'PULLING BACK') {
     subscriberReason += ' Short-term direction has turned bearish while the medium-term trend stays bullish — currently pulling back from a recent high. Don\'t chase; wait for the pullback to stabilize.';
   } else if (isBullishTier && phase === 'CONSOLIDATING') {
@@ -276,6 +330,7 @@ export function computeRating(r) {
     tier,
     confirmation: conf,
     phase,
+    extension: applyExtension,
     reason,
     subscriberReason,
   };

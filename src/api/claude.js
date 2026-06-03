@@ -42,6 +42,10 @@ Step 4 — Communicate the call in plain English. Lead with the tier, then the c
 
 The SYNTHESIZED RATING line in the prompt body already tells you which cell the engine computed — you must AGREE with it (the math is deterministic). Your job is to explain WHY the cell, not to recompute it.
 
+Modifiers (when present in the prompt, must be addressed in the narrative):
+- PRICE EXTENSION (EXTENDED / BLOW-OFF): when the price has run 30%+ or 60%+ above the 200-day SMA. The Rating still reflects the matrix, but the modifier tells you the trend is stretched / parabolic. Don't bury this — say it plainly: "Structurally ACCUMULATING but in BLOW-OFF territory at $X (Y% above the 200-day at $Z). Don't chase."
+- MOMENTUM PHASE (PULLING BACK / CONSOLIDATING / BOUNCING): when 15-day and 62-day directions diverge. Frame the timing nuance explicitly.
+
 Style:
 - Short, sharp, direct. Quant first, behavior second.
 - Mood (panic / euphoria / stealth build / grind) is informational — mention it if it adds color, but don't let it override the Rating.
@@ -228,12 +232,20 @@ TRADING RANGE (15-day probable range from volatility + lacunarity):
     const phaseTxt = rating.phase && rating.phase !== 'ADVANCING'
       ? `, phase=${rating.phase}`
       : '';
+    const extTxt = rating.extension
+      ? `, extension=${rating.extension}`
+      : '';
     prompt += `
 
-SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation}${phaseTxt})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
+SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation}${phaseTxt}${extTxt})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
 This Rating came from the deterministic 4×3 matrix (SMA tier × fractal
 confirmation). You must AGREE with it; your job is to explain WHY the
-matrix landed here, not to override it.${rating.phase && rating.phase !== 'ADVANCING' ? `
+matrix landed here, not to override it.${rating.extension ? `
+
+PRICE EXTENSION: ${rating.extension}. Price has run well above its 200-day
+SMA — this is structural strength but the late-stage, gravity-fights-you
+phase. Address this explicitly in the analysis:
+${rating.extension === 'BLOW-OFF' ? '"' + rating.rating + ' but in BLOW-OFF territory — price is more than 60% above the 200-day. Parabolic moves like this almost always retrace. Strongly avoid initiating; if you own it, consider scaling back."' : '"' + rating.rating + ' but EXTENDED — price is 30-60% above the 200-day. The structural call stands but this is a chase, not an entry. Wait for a meaningful pullback before adding."'}` : ''}${rating.phase && rating.phase !== 'ADVANCING' ? `
 
 MOMENTUM PHASE: ${rating.phase}. The structural Rating is correct, but the
 short-term momentum has diverged from the medium-term trend:
