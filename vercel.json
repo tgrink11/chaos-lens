@@ -11,7 +11,8 @@
     "api/kerry-scores.js": { "maxDuration": 10 },
     "api/ai-take.js": { "maxDuration": 30 },
     "api/analyze-ticker.js": { "maxDuration": 15 },
-    "api/intraday-quotes.js": { "maxDuration": 15 }
+    "api/intraday-quotes.js": { "maxDuration": 15 },
+    "api/admin/rescan.js": { "maxDuration": 60 }
   },
   "crons": [
     {

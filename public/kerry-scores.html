@@ -74,6 +74,13 @@
             <div id="staleness-warning" class="hidden mt-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 inline-block">
               Data is older than usual — next scan ~22:00 UTC weekdays
             </div>
+            <!-- Per-row stale count — surfaces when ANY individual row is
+                 >3 weekdays behind even if the global scan ran recently.
+                 (CORZ scenario: the table refreshes nightly but specific
+                 symbols silently fail and freeze for weeks.) -->
+            <div id="row-stale-warning" class="hidden mt-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 inline-block">
+              <span id="row-stale-count">0</span> symbol(s) have not refreshed in >3 weekdays — see "⚠ stale" chips in the table
+            </div>
           </div>
         </div>
       </div>
@@ -358,6 +365,8 @@
         lastScanned: $('#last-scanned'),
         lastScannedLabel: $('#last-scanned-label'),
         stalenessWarning: $('#staleness-warning'),
+        rowStaleWarning: $('#row-stale-warning'),
+        rowStaleCount: $('#row-stale-count'),
         rowCount: $('#row-count'),
         search: $('#search'),
       };
@@ -652,6 +661,13 @@
         if (!rating) return '<span class="text-slate-400 text-xs">—</span>';
         const cfg = RATING_CONFIG_UI[rating] || RATING_CONFIG_UI.HOLD;
         const reason = (r._ratingReason || '').replace(/"/g, '&quot;');
+        // Stale rows get a desaturated badge + clear "not current" tooltip
+        // so subscribers can never mistake a 22-day-old Rating for a fresh
+        // one. The Rating math is the same; only the visual + tooltip change.
+        if (r._isStale) {
+          const staleReason = `STALE — last scored ${r._weekdaysOld} weekday(s) ago. Underlying market conditions have likely changed; do not trade on this Rating until it refreshes.`.replace(/"/g, '&quot;');
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}</span>`;
+        }
         const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${reason}">${rating}</span>`;
 
         // Intraday overlay: when r._intradayRating is set (populated by
@@ -769,9 +785,17 @@
 
         const whyText = r._subscriberReason || '—';
         const whyEscaped = String(whyText).replace(/"/g, '&quot;');
+        // Stale chip: shown on rows whose scanned_at is more than 3
+        // weekdays behind. The cron silently failed for this symbol;
+        // the displayed Rating + numbers reflect data from N weekdays
+        // ago and may not match current market conditions. Subscribers
+        // shouldn't trade on these.
+        const staleChip = r._isStale
+          ? `<div class="mt-0.5"><span class="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300" title="This row hasn't refreshed in ${r._weekdaysOld} weekdays. Underlying market conditions have likely moved since then.">⚠ stale ${r._weekdaysOld}d</span></div>`
+          : '';
         return `
           <tr${rowAttrs}>
-            <td class="px-2 py-2 mono font-semibold">${r.symbol}</td>
+            <td class="px-2 py-2 mono font-semibold">${r.symbol}${staleChip}</td>
             <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtPrice(r.price)}</td>
             <td class="px-3 py-2 detail-only">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
@@ -1358,6 +1382,29 @@
 
       // ---------- Fetch + boot ----------
 
+      // Count weekdays (Mon-Fri) between two ISO timestamps. Used to
+      // flag stale rows: a row scanned Friday is 1 weekday old on Monday,
+      // not 3. Stays in lock-step with the server-side weekdaysSince()
+      // in src/server/kerry-scoring.js — same algorithm, same threshold.
+      function weekdaysSinceClient(scannedAtIso) {
+        if (!scannedAtIso) return Infinity;
+        const scanMs = new Date(scannedAtIso).getTime();
+        const nowMs = Date.now();
+        if (!Number.isFinite(scanMs) || nowMs <= scanMs) return 0;
+        const cursor = new Date(scanMs);
+        cursor.setUTCHours(0, 0, 0, 0);
+        const endDay = new Date(nowMs);
+        endDay.setUTCHours(0, 0, 0, 0);
+        let weekdays = 0;
+        while (cursor.getTime() < endDay.getTime()) {
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+          const dow = cursor.getUTCDay();
+          if (dow >= 1 && dow <= 5) weekdays++;
+        }
+        return weekdays;
+      }
+      const STALE_THRESHOLD_WEEKDAYS_CLIENT = 3;
+
       async function load() {
         try {
           const resp = await fetch(API_URL, { cache: 'no-cache' });
@@ -1365,6 +1412,16 @@
           const data = await resp.json();
           allScores = (Array.isArray(data.scores) ? data.scores : []).map((r) => {
             const enriched = { ...r, _conviction: convictionScore(r) };
+            // Staleness annotation. If this row's scanned_at is more than
+            // STALE_THRESHOLD_WEEKDAYS_CLIENT (3) trading days old, mark
+            // it stale — the cron has silently failed for this symbol
+            // and the Rating reflects data from N weekdays ago, not now.
+            // The UI grays out the Rating + adds an "⚠ stale" chip in
+            // the Symbol cell so subscribers can't mistake a frozen
+            // row for a fresh signal.
+            const weekdaysOld = weekdaysSinceClient(r.scanned_at);
+            enriched._weekdaysOld = weekdaysOld;
+            enriched._isStale = weekdaysOld > STALE_THRESHOLD_WEEKDAYS_CLIENT;
             const rating = computeRating(enriched);
             enriched._rating = rating.rating;
             enriched._ratingReason = rating.reason;
@@ -1372,6 +1429,16 @@
             enriched._entryQuality = entryQuality(enriched);
             return enriched;
           });
+          // Count stale rows for the global header warning.
+          const staleCount = allScores.filter(r => r._isStale).length;
+          if (staleCount > 0) {
+            els.rowStaleCount.textContent = String(staleCount);
+            els.rowStaleWarning.classList.remove('hidden');
+            console.warn(`[kerry-scores] ${staleCount} stale rows detected (>${STALE_THRESHOLD_WEEKDAYS_CLIENT} weekdays old):`,
+              allScores.filter(r => r._isStale).map(r => `${r.symbol} (${r._weekdaysOld}d)`));
+          } else {
+            els.rowStaleWarning.classList.add('hidden');
+          }
           attachPercentiles(allScores);
           // Header freshness banner. The big bold "Rating column reflects"
           // line shows the close date (e.g. "Mon, Jun 1, 2026 close"),
