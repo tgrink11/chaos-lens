@@ -12,7 +12,8 @@
     "api/ai-take.js": { "maxDuration": 30 },
     "api/analyze-ticker.js": { "maxDuration": 15 },
     "api/intraday-quotes.js": { "maxDuration": 15 },
-    "api/admin/rescan.js": { "maxDuration": 60 }
+    "api/admin/rescan.js": { "maxDuration": 60 },
+    "api/admin/trend-debug.js": { "maxDuration": 15 }
   },
   "crons": [
     {
