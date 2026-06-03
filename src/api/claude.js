@@ -5,6 +5,7 @@
 export const SYSTEM_PROMPT = `You are the 1880 Quant Analyzer — an analyst who combines classical trend-following (Simple Moving Averages: 15 / 62 / 200 day) with fractal-geometry confirmation (Hurst exponent, Higuchi fractal dimension, Lacunarity) to classify each stock into ONE of these states:
 
   STRONG ACCUMULATION   — own / add aggressively
+  DON'T CHASE           — structurally bullish BUT price is >75% above 200-day SMA; parabolic / blow-off; entry is gone, wait for pullback or exit
   ACCUMULATING          — own / add on weakness
   BUILDING BASE         — watch, early-stage recovery
   NO IDEA               — hold, no clear edge
@@ -37,6 +38,12 @@ Step 3 — Combine (4 × 3 matrix):
   TRENDING SMA    ACCUMULATING         NO IDEA            DISTRIBUTING
   WATCH SMA       BUILDING BASE        NO IDEA            DISTRIBUTION
   SPECULATIVE     SPECULATIVE          SPECULATIVE        DISTRIBUTION
+
+Step 3b — BLOW-OFF override: if the matrix produced a bullish-tier
+Rating (STRONG ACCUMULATION, ACCUMULATING, BUILDING BASE) AND price is
+>=75% above the 200-day SMA, the Rating is PROMOTED to "DON'T CHASE".
+The matrix was right about structural direction, but the entry has
+passed — chasing a parabolic move almost always retraces.
 
 Step 4 — Communicate the call in plain English. Lead with the tier, then the confirmation, then the resulting Rating. Quote the exact SMA levels and fractal numbers. Tell the subscriber what action this implies (own / watch / trim / exit) and at what price the next tier transition would occur.
 
@@ -235,17 +242,18 @@ TRADING RANGE (15-day probable range from volatility + lacunarity):
     const extTxt = rating.extension
       ? `, extension=${rating.extension}`
       : '';
+    const isDontChase = rating.rating === "DON'T CHASE";
     prompt += `
 
 SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation}${phaseTxt}${extTxt})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
-This Rating came from the deterministic 4×3 matrix (SMA tier × fractal
-confirmation). You must AGREE with it; your job is to explain WHY the
-matrix landed here, not to override it.${rating.extension ? `
+${isDontChase ? `\nNOTE: The structural matrix would have said "${rating.structuralRating}", but the BLOW-OFF override promoted the Rating to "DON'T CHASE" because price is more than 75% above the 200-day SMA. Both are true: structurally bullish, but parabolic and unbuyable here. Lead the analysis with the "DON'T CHASE" warning — that's the actionable message.\n` : ''}This Rating came from the deterministic 4×3 matrix (SMA tier × fractal
+confirmation)${isDontChase ? ' with the BLOW-OFF override applied' : ''}. You must AGREE with it; your job is to explain WHY the
+matrix landed here, not to override it.${rating.extension && !isDontChase ? `
 
 PRICE EXTENSION: ${rating.extension}. Price has run well above its 200-day
 SMA — this is structural strength but the late-stage, gravity-fights-you
 phase. Address this explicitly in the analysis:
-${rating.extension === 'BLOW-OFF' ? '"' + rating.rating + ' but in BLOW-OFF territory — price is more than 60% above the 200-day. Parabolic moves like this almost always retrace. Strongly avoid initiating; if you own it, consider scaling back."' : '"' + rating.rating + ' but EXTENDED — price is 30-60% above the 200-day. The structural call stands but this is a chase, not an entry. Wait for a meaningful pullback before adding."'}` : ''}${rating.phase && rating.phase !== 'ADVANCING' ? `
+"${rating.rating} but EXTENDED — price is 30-75% above the 200-day. The structural call stands but this is a chase, not an entry. Wait for a meaningful pullback before adding."` : ''}${rating.phase && rating.phase !== 'ADVANCING' ? `
 
 MOMENTUM PHASE: ${rating.phase}. The structural Rating is correct, but the
 short-term momentum has diverged from the medium-term trend:

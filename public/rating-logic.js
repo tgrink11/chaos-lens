@@ -58,15 +58,20 @@ export const RATING_CONFIG = {
   // so far above its long-term average that buying here is chasing the
   // top. These thresholds add a modifier to the Rating so subscribers
   // see the over-extension at a glance.
-  EXTENSION_WARN_PCT:    0.30,  // price > 30% above SMA200 = EXTENDED
-  EXTENSION_BLOWOFF_PCT: 0.60,  // price > 60% above SMA200 = BLOW-OFF
+  EXTENSION_WARN_PCT:    0.30,  // price > 30% above SMA200 = EXTENDED (modifier)
+  EXTENSION_BLOWOFF_PCT: 0.75,  // price > 75% above SMA200 = DON'T CHASE
+                                // (REPLACES the structural Rating, not a modifier —
+                                //  see computeRating for the override logic).
 };
 
 // Sort order: action urgency / bullishness. STRONG ACCUMULATION at top,
-// DISTRIBUTION at bottom. Speculative sits below distribution since it's
-// "dead money" in most cases (below the 200-day line of last resort).
+// DISTRIBUTION at bottom. DON'T CHASE sits high (above ACCUMULATING) so
+// subscribers see the warnings prominently when sorting by Rating —
+// these are stocks you'd own if you got in earlier; the call is
+// "structurally bullish but the entry is gone."
 export const RATING_ORDER = {
-  'STRONG ACCUMULATION': 8,
+  'STRONG ACCUMULATION': 9,
+  "DON'T CHASE":         8,
   'ACCUMULATING':        7,
   'BUILDING BASE':       6,
   'NO IDEA':             5,
@@ -78,9 +83,12 @@ export const RATING_ORDER = {
 
 // Tailwind classes for each Rating badge. Greens for accumulation states,
 // slate for indecision, orange/red for distribution states, amber for
-// speculative (caution).
+// speculative (caution). DON'T CHASE uses red so it can't be confused
+// with a bullish state — even though structurally the stock is bullish,
+// the entry has passed and chasing here is the wrong move.
 export const RATING_BADGE_CLS = {
   'STRONG ACCUMULATION': 'bg-emerald-600 text-white font-bold ring-1 ring-emerald-700',
+  "DON'T CHASE":         'bg-red-600 text-white font-bold ring-2 ring-red-700',
   'ACCUMULATING':        'bg-emerald-100 text-emerald-800 font-semibold ring-1 ring-emerald-400',
   'BUILDING BASE':       'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300',
   'NO IDEA':             'bg-slate-100 text-slate-600',
@@ -248,6 +256,7 @@ const RATING_MATRIX = {
 // badge tooltip and feeds the AI Take prompt's framing.
 const SUBSCRIBER_REASONS = {
   'STRONG ACCUMULATION': 'Price is stacked above all three moving averages and the underlying price action confirms a real, persistent trend. This is the model\'s strongest accumulation signal — own / add.',
+  "DON'T CHASE":         'Price is more than 75% above the 200-day moving average. Structurally the trend is still bullish, but the entry is GONE — buying here is chasing a parabolic move that almost always retraces. Wait for a meaningful pullback (toward the 15-day or 62-day SMA) before initiating a new position. If you already own it, consider scaling back into strength.',
   'ACCUMULATING':        'Price is above the medium- and long-term trend lines, and the price action supports a real trend. A constructive setup — own / add on weakness.',
   'BUILDING BASE':       'Price has reclaimed the 200-day line of last resort with a confirmed fractal signature. Still early — watch for the 62-day cross before adding aggressively.',
   'NO IDEA':             'Price is in a defensible trend tier but the underlying price action doesn\'t confirm or reject — mixed signals, no clear edge. Hold what you have; don\'t initiate.',
@@ -294,27 +303,37 @@ export function computeRating(r) {
     };
   }
 
-  const rating = RATING_MATRIX[tier][conf];
+  const structuralRating = RATING_MATRIX[tier][conf];
   const isBullishTier = (tier === 'STRONG' || tier === 'TRENDING' || tier === 'WATCH');
   // Extension only meaningful for bullish tiers. For SPECULATIVE
   // (price < SMA200) the calc would be negative and priceExtension()
-  // already returns null. Below we just clip it for WATCH tier where
-  // the modifier doesn't add value (WATCH means price is just barely
-  // above 200d, can't really be extended).
+  // already returns null. WATCH (price just above 200d) can't really
+  // be extended, so we clip there too.
   const applyExtension = (tier === 'STRONG' || tier === 'TRENDING') ? extension : null;
 
-  const reason = `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}${applyExtension ? `, extension=${applyExtension}` : ''}`;
+  // BLOW-OFF override: when extension hits the BLOWOFF threshold (>=75%
+  // above SMA200), the structural Rating gets PROMOTED to "DON'T CHASE"
+  // as the top-level label. Subscribers scan the page in two seconds —
+  // the warning needs to be the headline word they read, not a footnote
+  // after "ACCUMULATING". The structural call is preserved in the
+  // `structuralRating` field and shown as a subline in the UI.
+  const overrideRating = applyExtension === 'BLOW-OFF' && isBullishTier;
+  const rating = overrideRating ? "DON'T CHASE" : structuralRating;
 
-  // Subscriber explanation: append timing and extension nuance so the
-  // tooltip reads the full picture.
+  const reason = overrideRating
+    ? `BLOW-OFF override (price ≥${Math.round(RATING_CONFIG.EXTENSION_BLOWOFF_PCT * 100)}% above 200d) — structural matrix would have said ${structuralRating}; tier=${tier}, fractal=${conf}${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}`
+    : `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}${applyExtension ? `, extension=${applyExtension}` : ''}`;
+
+  // Subscriber explanation: start with the canonical reason for whichever
+  // Rating fired, then append the timing nuance (extension comes first
+  // because it's the bigger deal).
   let subscriberReason = SUBSCRIBER_REASONS[rating] || '';
 
-  // Extension warnings come first because they're a bigger deal —
-  // a blow-off rating is a "don't chase" signal regardless of phase.
-  if (applyExtension === 'BLOW-OFF') {
-    subscriberReason += ' Price is more than 60% above the 200-day moving average — this is parabolic / blow-off territory, and gravity historically wins from here. Strongly avoid initiating; if you own it, consider scaling back.';
-  } else if (applyExtension === 'EXTENDED') {
-    subscriberReason += ' Price is 30-60% above the 200-day moving average — stretched. The structural call is still bullish but this is not a good entry point; wait for a meaningful pullback.';
+  // For DON'T CHASE, the canonical reason already covers the extension
+  // warning. Skip the EXTENDED branch (it doesn't apply when we've
+  // already promoted to DON'T CHASE).
+  if (!overrideRating && applyExtension === 'EXTENDED') {
+    subscriberReason += ' Price is 30-75% above the 200-day moving average — stretched. The structural call is still bullish but this is not a good entry point; wait for a meaningful pullback.';
   }
 
   if (isBullishTier && phase === 'PULLING BACK') {
@@ -327,6 +346,9 @@ export function computeRating(r) {
 
   return {
     rating,
+    structuralRating, // What the matrix would have returned without the BLOW-OFF override.
+                      // The UI shows this as a small "(structurally STRONG ACCUMULATION)"
+                      // subline beneath DON'T CHASE so analytical info isn't lost.
     tier,
     confirmation: conf,
     phase,

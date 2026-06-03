@@ -137,7 +137,7 @@
                   <tr><th class="px-2 py-1.5 text-left border-b border-slate-300">SMA tier ↓ / Fractal →</th><th class="px-2 py-1.5 border-b border-slate-300">STRONG confirmation</th><th class="px-2 py-1.5 border-b border-slate-300">INDECISIVE</th><th class="px-2 py-1.5 border-b border-slate-300">WEAK confirmation</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
-                  <tr><td class="px-2 py-1.5 font-semibold">STRONG (above 15/62/200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-600 text-white font-bold">STRONG ACCUMULATION</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold">ACCUMULATING</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800">TOPPING</span></td></tr>
+                  <tr><td class="px-2 py-1.5 font-semibold">STRONG (above 15/62/200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-600 text-white font-bold">STRONG ACCUMULATION</span><br><span class="text-[9px] text-slate-500">(<strong class="text-red-700">DON'T CHASE</strong> if &gt;75% above 200d)</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold">ACCUMULATING</span><br><span class="text-[9px] text-slate-500">(<strong class="text-red-700">DON'T CHASE</strong> if &gt;75% above 200d)</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800">TOPPING</span></td></tr>
                   <tr><td class="px-2 py-1.5 font-semibold">TRENDING (above 62 &amp; 200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold">ACCUMULATING</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">NO IDEA</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-200 text-orange-900 font-semibold">DISTRIBUTING</span></td></tr>
                   <tr><td class="px-2 py-1.5 font-semibold">WATCH (above 200 only)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700">BUILDING BASE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">NO IDEA</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold">DISTRIBUTION</span></td></tr>
                   <tr><td class="px-2 py-1.5 font-semibold">SPECULATIVE (below 200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">SPECULATIVE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">SPECULATIVE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold">DISTRIBUTION</span></td></tr>
@@ -150,6 +150,7 @@
             <h2 class="text-base font-semibold text-slate-900 mb-2">What each Rating means for action</h2>
             <div class="space-y-1.5 ml-1">
               <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-600 text-white font-bold mr-2">STRONG ACCUMULATION</span> <strong>Own / add aggressively.</strong> Clearest, most-confirmed setup.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-600 text-white font-bold ring-2 ring-red-700 mr-2">DON'T CHASE</span> <strong>Do NOT initiate.</strong> Structurally still bullish but price is &gt;75% above the 200-day SMA — parabolic / blow-off territory. Wait for a meaningful pullback (toward 15-day or 62-day SMA) before considering an entry. If you own it, consider scaling back into strength.</div>
               <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold mr-2">ACCUMULATING</span> <strong>Own / add on weakness.</strong> Trend is real and intact.</div>
               <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 mr-2">BUILDING BASE</span> <strong>Watch.</strong> Early-stage recovery; wait for 62-day cross before adding aggressively.</div>
               <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 mr-2">NO IDEA</span> <strong>Hold what you have.</strong> Mixed signals; don't initiate.</div>
@@ -175,17 +176,14 @@
           <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">Rating modifiers (the lowercase tag after the Rating)</h2>
             <p class="mb-2">
-              The Rating tells you the structural state. But sometimes there's a timing or extension
-              nuance you need to see at a glance. When applicable, the badge shows a lowercase tag
-              after an em-dash (e.g. <em>"ACCUMULATING — blow-off · pulling back"</em>).
+              The Rating tells you the structural state. But sometimes there's a timing or
+              extension nuance you need to see at a glance. When applicable, the badge shows a
+              lowercase tag after an em-dash (e.g. <em>"ACCUMULATING — extended · pulling back"</em>).
             </p>
             <ul class="ml-5 space-y-1.5 list-disc">
-              <li><strong>extended</strong> — price is 30–60% above the 200-day SMA. The structural
+              <li><strong>extended</strong> — price is 30–75% above the 200-day SMA. The structural
                 Rating still stands but the move is stretched; this isn't a good entry, wait for a
-                pullback.</li>
-              <li><strong>blow-off</strong> — price is &gt;60% above the 200-day SMA. Parabolic /
-                vertical move. Gravity wins from here. Strongly avoid initiating; consider scaling
-                back if you own it.</li>
+                pullback. (Beyond 75% the Rating itself becomes <strong class="text-red-700">DON'T CHASE</strong>.)</li>
               <li><strong>pulling back</strong> — 15-day direction has turned bearish while 62-day
                 stays bullish. Classical pullback inside an uptrend. Don't chase; wait for the
                 pullback to stabilize.</li>
@@ -195,9 +193,11 @@
                 Counter-trend rally, not a confirmed reversal.</li>
             </ul>
             <p class="mt-3 text-slate-600">
-              Modifiers stack. <em>STRONG ACCUMULATION — blow-off · pulling back</em> means the
-              structural Rating is bullish, but the stock is parabolically extended AND currently
-              correcting. The exact opposite of a fresh entry signal.
+              Modifiers stack. <em>ACCUMULATING — extended · pulling back</em> means the trend
+              is bullish, the stock is stretched, AND currently correcting. Different from
+              <strong class="text-red-700">DON'T CHASE</strong>, where the extension is so extreme
+              the Rating itself is overridden and a small "structurally accumulating" subline
+              appears below the badge so the analytical info is still visible.
             </p>
           </section>
 
@@ -652,18 +652,18 @@
         return RATING_BADGE_CLS[rating] || 'bg-slate-100 text-slate-600';
       }
 
-      // Rating modifiers — appended to the Rating label. Two kinds:
-      //   - Extension (EXTENDED / BLOW-OFF): price far above 200-day SMA
-      //   - Phase (PULLING BACK / CONSOLIDATING / BOUNCING): short-term
-      //     momentum divergence from medium-term
-      // Extension comes first because it's the more important warning.
-      // When both apply (e.g. DELL: blow-off + pulling back), they stack
-      // separated by a middle dot.
+      // Rating modifiers — appended to the Rating label. Only used for
+      // states the Rating word itself doesn't already convey:
+      //   - EXTENDED (price 30-75% above SMA200): "extended" suffix
+      //   - Phase (PULLING BACK / CONSOLIDATING / BOUNCING)
+      // BLOW-OFF is NOT a modifier here — it's promoted to the top-level
+      // "DON'T CHASE" Rating, so saying "DON'T CHASE — blow-off" would
+      // be redundant. EXTENDED stays as a modifier because the structural
+      // Rating (ACCUMULATING etc.) is still the right headline at that
+      // less-extreme level of extension.
       function ratingModifiers(r) {
         const parts = [];
-        if (r._extension === 'BLOW-OFF') {
-          parts.push('<span class="font-semibold">blow-off</span>');
-        } else if (r._extension === 'EXTENDED') {
+        if (r._extension === 'EXTENDED' && r._rating !== "DON'T CHASE") {
           parts.push('extended');
         }
         if (r._phase && r._phase !== 'ADVANCING') {
@@ -680,13 +680,21 @@
         // Subscriber-friendly explanation goes in the badge tooltip — saves
         // the dedicated "Why" column, keeps the explanation one hover away.
         const subscriberWhy = (r._subscriberReason || '').replace(/"/g, '&quot;');
+        // When the Rating was overridden to DON'T CHASE, render the
+        // structural call ("structurally STRONG ACCUMULATION") as a
+        // small subline beneath the badge so subscribers still see the
+        // analytical info. They scan the red headline first, but the
+        // context is one glance away.
+        const structuralSubline = (rating === "DON'T CHASE" && r._structuralRating && r._structuralRating !== rating)
+          ? `<div class="text-[9px] text-slate-500 mt-0.5 font-normal">structurally ${r._structuralRating.toLowerCase()}</div>`
+          : '';
         // Stale rows get a desaturated badge + clear "not current" tooltip
         // so subscribers can never mistake a stale Rating for a fresh one.
         if (r._isStale) {
           const staleReason = `STALE — last scored ${r._weekdaysOld} weekday(s) ago. Underlying market conditions have likely changed; do not trade on this Rating until it refreshes.`.replace(/"/g, '&quot;');
-          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}${ratingModifiers(r)}</span>`;
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}${ratingModifiers(r)}</span>${structuralSubline}`;
         }
-        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}${ratingModifiers(r)}</span>`;
+        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}${ratingModifiers(r)}</span>${structuralSubline}`;
 
         // Intraday overlay: when r._intradayRating is set (populated by
         // the Intraday overlay button), render a second badge below the
@@ -1012,7 +1020,7 @@
         // of which are EOD inputs — no need to recompute it.
         overlay._conviction = row._conviction;
         const r = computeRating(overlay);
-        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, phase: r.phase, extension: r.extension, range_pos: overlay.range_pos };
+        return { rating: r.rating, structuralRating: r.structuralRating, reason: r.reason, subscriberReason: r.subscriberReason, phase: r.phase, extension: r.extension, range_pos: overlay.range_pos };
       }
 
       async function applyIntradayOverlay() {
@@ -1126,6 +1134,7 @@
           customRow = { ...data, _conviction: convictionScore(data) };
           const _rt = computeRating(customRow);
           customRow._rating = _rt.rating;
+          customRow._structuralRating = _rt.structuralRating;
           customRow._ratingReason = _rt.reason;
           customRow._subscriberReason = _rt.subscriberReason;
           customRow._phase = _rt.phase;
@@ -1408,6 +1417,7 @@
             enriched._isStale = weekdaysOld > STALE_THRESHOLD_WEEKDAYS_CLIENT;
             const rating = computeRating(enriched);
             enriched._rating = rating.rating;
+            enriched._structuralRating = rating.structuralRating;
             enriched._ratingReason = rating.reason;
             enriched._subscriberReason = rating.subscriberReason;
             enriched._phase = rating.phase;
