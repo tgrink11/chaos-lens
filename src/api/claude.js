@@ -225,12 +225,19 @@ TRADING RANGE (15-day probable range from volatility + lacunarity):
 - ${volTxt}`;
   }
   if (rating && rating.rating) {
+    const phaseTxt = rating.phase && rating.phase !== 'ADVANCING'
+      ? `, phase=${rating.phase}`
+      : '';
     prompt += `
 
-SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
+SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation}${phaseTxt})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
 This Rating came from the deterministic 4×3 matrix (SMA tier × fractal
 confirmation). You must AGREE with it; your job is to explain WHY the
-matrix landed here, not to override it.`;
+matrix landed here, not to override it.${rating.phase && rating.phase !== 'ADVANCING' ? `
+
+MOMENTUM PHASE: ${rating.phase}. The structural Rating is correct, but the
+short-term momentum has diverged from the medium-term trend:
+${rating.phase === 'PULLING BACK' ? '15-day direction has turned bearish while the 62-day stays bullish — classical pullback inside an uptrend. Address this explicitly: "Structurally ' + rating.rating + ', but currently pulling back from a recent high — don\'t chase."' : ''}${rating.phase === 'CONSOLIDATING' ? '15-day direction is flat while the 62-day stays bullish — sideways digestion of a recent move. Address this explicitly: "Structurally ' + rating.rating + ', currently consolidating — watch for the next directional resolution."' : ''}${rating.phase === 'BOUNCING' ? '15-day has flipped bullish against a bearish 62-day — this is a counter-trend rally, not a confirmed reversal. Treat with skepticism.' : ''}` : ''}`;
   }
 
   prompt += `

@@ -149,6 +149,40 @@ export function fractalConfirmation(r) {
   return 'INDECISIVE';
 }
 
+/**
+ * Momentum phase — short-term dynamic ON TOP OF the structural Rating.
+ *
+ * The Rating matrix (SMA tier × fractal confirmation) is STRUCTURAL —
+ * it tells you whether the stock is in accumulation/distribution
+ * territory. But it doesn't capture the IMMEDIATE dynamic: a stock that
+ * gapped up Friday and is now fading is structurally still in the
+ * ACCUMULATING tier (above all SMAs, fractals reinforced by the gap),
+ * but the current price action is a pullback — and that timing matters
+ * for entry.
+ *
+ * Phase reads 15d-vs-62d direction divergence:
+ *   ADVANCING       both bullish (default — no modifier displayed)
+ *   PULLING BACK    62d bullish, 15d bearish — classical pullback in uptrend
+ *   CONSOLIDATING   62d bullish, 15d neutral — sideways digestion
+ *   BOUNCING        62d bearish, 15d bullish — counter-trend rally
+ *   (other states are typically already captured by the bearish tiers)
+ *
+ * Returns null when either direction is missing.
+ *
+ * @param {{short_term_direction:?string, medium_term_direction:?string}} r
+ * @returns {'ADVANCING'|'PULLING BACK'|'CONSOLIDATING'|'BOUNCING'|null}
+ */
+export function momentumPhase(r) {
+  const st = String(r.short_term_direction || '').toLowerCase();
+  const mt = String(r.medium_term_direction || '').toLowerCase();
+  if (!st || !mt) return null;
+  if (st === 'bullish' && mt === 'bullish') return 'ADVANCING';
+  if (st === 'bearish' && mt === 'bullish') return 'PULLING BACK';
+  if (st === 'neutral' && mt === 'bullish') return 'CONSOLIDATING';
+  if (st === 'bullish' && mt === 'bearish') return 'BOUNCING';
+  return null; // bearish/bearish, neutral/bearish, etc. — already captured by Rating tier
+}
+
 // The 4×3 lookup matrix. Indexed by [tier][confirmation].
 const RATING_MATRIX = {
   'STRONG': {
@@ -204,6 +238,7 @@ const SUBSCRIBER_REASONS = {
 export function computeRating(r) {
   const tier = smaTier(r);
   const conf = fractalConfirmation(r);
+  const phase = momentumPhase(r);
 
   // Insufficient data: we need at least a price + one SMA to produce
   // any tier, and one fractal value to produce any confirmation. If
@@ -213,6 +248,7 @@ export function computeRating(r) {
       rating: 'NO IDEA',
       tier,
       confirmation: conf,
+      phase,
       reason: !tier ? 'no SMA reference (newly-listed or missing data)'
             : 'no fractal signature available',
       subscriberReason: 'Insufficient data to score this name yet — typically a newly-listed stock or one with gaps in its price history.',
@@ -220,13 +256,28 @@ export function computeRating(r) {
   }
 
   const rating = RATING_MATRIX[tier][conf];
-  const reason = `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})`;
+  const reason = `SMA tier=${tier} (price vs 15/62/200), fractal=${conf} (H/D/Λ vs ${RATING_CONFIG.FRACTAL_H_MIN}/${RATING_CONFIG.FRACTAL_D_MAX}/${RATING_CONFIG.FRACTAL_LAMBDA_MAX})${phase && phase !== 'ADVANCING' ? `, phase=${phase}` : ''}`;
+
+  // Phase-aware subscriber explanation: when a bullish-tier stock is
+  // pulling back or consolidating, append a sentence so subscribers
+  // see the timing nuance alongside the structural call.
+  let subscriberReason = SUBSCRIBER_REASONS[rating] || '';
+  const isBullishTier = (tier === 'STRONG' || tier === 'TRENDING' || tier === 'WATCH');
+  if (isBullishTier && phase === 'PULLING BACK') {
+    subscriberReason += ' Short-term direction has turned bearish while the medium-term trend stays bullish — currently pulling back from a recent high. Don\'t chase; wait for the pullback to stabilize.';
+  } else if (isBullishTier && phase === 'CONSOLIDATING') {
+    subscriberReason += ' Short-term direction is flat while the medium-term trend stays bullish — digesting a recent move. Watch for the next directional resolution.';
+  } else if (phase === 'BOUNCING') {
+    subscriberReason += ' Short-term has flipped bullish against a bearish medium-term backdrop — this is a counter-trend bounce, not a confirmed reversal.';
+  }
+
   return {
     rating,
     tier,
     confirmation: conf,
+    phase,
     reason,
-    subscriberReason: SUBSCRIBER_REASONS[rating] || '',
+    subscriberReason,
   };
 }
 

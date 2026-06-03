@@ -281,7 +281,11 @@
           <thead class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-600">
             <tr class="group-header">
               <th rowspan="2" class="sortable px-2 py-2.5 text-left align-middle" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
-              <th rowspan="2" class="sortable px-2 py-2.5 text-right align-middle" data-sort="price">Price<span class="sort-arrow"></span></th>
+              <th rowspan="2" class="sortable px-2 py-2.5 text-right align-middle" data-sort="price" title="Most recent EOD close. The cron runs at 22:00 UTC weekdays (~2h after the US market close), so during the trading day this is yesterday's close — not an intraday quote. See the 'Rating column reflects' label in the header for the exact date. Use the ⚡ Intraday overlay button if you want a live-price view.">
+                Price<br>
+                <span class="text-[9px] font-normal normal-case text-slate-400" id="price-as-of-label">EOD close</span>
+                <span class="sort-arrow"></span>
+              </th>
               <th rowspan="2" class="sortable px-2 py-2.5 text-left align-middle" data-sort="list_type">List<span class="sort-arrow"></span></th>
               <th rowspan="2" class="sortable px-2 py-2.5 text-center align-middle" data-sort="rating" title="1880 Quant Analyzer Rating. Synthesis of: (1) SMA tier — where price sits relative to the 15 / 62 / 200-day moving averages, and (2) fractal confirmation — whether Hurst / Box dim / Lambda confirm a real trend. The combined Rating tells you whether a stock is accumulating, distributing, or indecisive.">Rating<span class="sort-arrow"></span></th>
               <th colspan="7" class="col-group-fractals px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-yellow-800 border-l border-r border-slate-200">Fractals: Trend Confirmation</th>
@@ -336,6 +340,7 @@
         rowStaleCount: $('#row-stale-count'),
         rowCount: $('#row-count'),
         search: $('#search'),
+        priceAsOfLabel: $('#price-as-of-label'),
       };
 
       let allScores = [];
@@ -618,6 +623,19 @@
         return RATING_BADGE_CLS[rating] || 'bg-slate-100 text-slate-600';
       }
 
+      // Phase modifier — appended to the Rating label when the short-term
+      // direction diverges from the medium-term. Display the modifier only
+      // for non-ADVANCING phases (ADVANCING is the default state where
+      // 15d and 62d both point bullish, so no extra label is needed).
+      // The modifier renders in lowercase + smaller text so it reads as a
+      // qualifier of the Rating, not a competing label.
+      function phaseModifier(r) {
+        const phase = r._phase;
+        if (!phase || phase === 'ADVANCING') return '';
+        const txt = phase.toLowerCase();
+        return ` <span class="text-[9px] font-normal opacity-80">— ${txt}</span>`;
+      }
+
       function ratingBadgeHtml(r) {
         const rating = r._rating;
         if (!rating) return '<span class="text-slate-400 text-xs">—</span>';
@@ -629,9 +647,9 @@
         // so subscribers can never mistake a stale Rating for a fresh one.
         if (r._isStale) {
           const staleReason = `STALE — last scored ${r._weekdaysOld} weekday(s) ago. Underlying market conditions have likely changed; do not trade on this Rating until it refreshes.`.replace(/"/g, '&quot;');
-          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}</span>`;
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}${phaseModifier(r)}</span>`;
         }
-        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}</span>`;
+        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}${phaseModifier(r)}</span>`;
 
         // Intraday overlay: when r._intradayRating is set (populated by
         // the Intraday overlay button), render a second badge below the
@@ -957,7 +975,7 @@
         // of which are EOD inputs — no need to recompute it.
         overlay._conviction = row._conviction;
         const r = computeRating(overlay);
-        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, range_pos: overlay.range_pos };
+        return { rating: r.rating, reason: r.reason, subscriberReason: r.subscriberReason, phase: r.phase, range_pos: overlay.range_pos };
       }
 
       async function applyIntradayOverlay() {
@@ -1073,6 +1091,7 @@
           customRow._rating = _rt.rating;
           customRow._ratingReason = _rt.reason;
           customRow._subscriberReason = _rt.subscriberReason;
+          customRow._phase = _rt.phase;
           customRow._entryQuality = entryQuality(customRow);
           customStatus = 'idle';
           customError = null;
@@ -1353,6 +1372,7 @@
             enriched._rating = rating.rating;
             enriched._ratingReason = rating.reason;
             enriched._subscriberReason = rating.subscriberReason;
+            enriched._phase = rating.phase;
             enriched._entryQuality = entryQuality(enriched);
             return enriched;
           });
@@ -1378,12 +1398,22 @@
           // schedule of 1-5 weekdays explicitly skips Sat/Sun).
           if (data.lastScanned) {
             const scanDate = new Date(data.lastScanned);
-            els.lastScannedLabel.textContent = scanDate.toLocaleDateString('en-US', {
+            const dateShort = scanDate.toLocaleDateString('en-US', {
               weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-            }) + ' close';
+            });
+            els.lastScannedLabel.textContent = dateShort + ' close';
             els.lastScanned.textContent = `Scanned ${scanDate.toLocaleString('en-US', {
               month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
             })}`;
+            // Column header sub-label: explicit "as of [date]" under the
+            // Price header so subscribers can't mistake yesterday's close
+            // for an intraday quote. Format intentionally short (e.g.
+            // "Jun 2 close") to fit under the column header.
+            if (els.priceAsOfLabel) {
+              els.priceAsOfLabel.textContent = scanDate.toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric',
+              }) + ' close';
+            }
             const ageHrs = (Date.now() - scanDate.getTime()) / 3600000;
             const dayOfWeek = new Date().getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
             const isWeekendCatchUp = dayOfWeek === 1 && ageHrs < 80; // Mon, <~3.3d
