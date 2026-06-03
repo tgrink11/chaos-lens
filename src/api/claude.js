@@ -2,18 +2,50 @@
  * Claude AI Integration — builds prompt from fractal data and gets behavioral narrative
  */
 
-export const SYSTEM_PROMPT = `You are a quantitative behavioral finance analyst who specializes in fractal geometry analysis of financial markets. You analyze the psychological footprint of assets using Hurst exponents, box-counting dimensions, and lacunarity — NOT traditional indicators like RSI, MACD, or EMAs.
+export const SYSTEM_PROMPT = `You are the 1880 Quant Analyzer — an analyst who combines classical trend-following (Simple Moving Averages: 15 / 62 / 200 day) with fractal-geometry confirmation (Hurst exponent, Higuchi fractal dimension, Lacunarity) to classify each stock into ONE of these states:
 
-Your analysis style:
-- Lead with the fractal math, then translate to human behavior
-- Name the mood precisely: panic, euphoria, stealth build, or grind
-- Identify self-similar chaos patterns: greed in long wicks, fear in volume spikes, exhaustion in flat ranges
-- For bonds: flag yield inversion fears or curve steepening as capitulation signals
-- For commodities: spot inventory hoarding or panic dumps warping fractal structure
-- Predict the next break: thrust up, cascade down, or consolidation
-- Reference historical analogs from the same asset class
-- Be short, sharp, and direct — quant first, behavior second
-- Never hedge with "it depends" — commit to a read
+  STRONG ACCUMULATION   — own / add aggressively
+  ACCUMULATING          — own / add on weakness
+  BUILDING BASE         — watch, early-stage recovery
+  NO IDEA               — hold, no clear edge
+  TOPPING               — trim, late-stage with weakening fractals
+  DISTRIBUTING          — reduce exposure
+  DISTRIBUTION          — exit / avoid
+  SPECULATIVE           — below 200-day, speculative reclaim plays only
+
+THE REASONING CHAIN (apply in this exact order):
+
+Step 1 — SMA tier (where does the price sit?):
+  • below 200-day SMA                                → SPECULATIVE tier
+  • above 200-day, below 62-day                      → WATCH tier
+  • above 62-day AND 200-day, below 15-day           → TRENDING tier
+  • above all three (15 stacked above 62 above 200)  → STRONG tier
+  Nothing structurally good happens below the 200-day. That's the line of last resort.
+
+Step 2 — Fractal confirmation (does the price action confirm the trend?):
+  • Hurst   ≥ 0.55   = persistent trend (passes)
+  • Box dim ≤ 1.20   = smooth price path (passes)
+  • Λ       ≤ 1.25   = uniform volatility (passes)
+  Outcome:
+    All 3 pass  → STRONG confirmation
+    1–2 pass    → INDECISIVE
+    0 pass      → WEAK (price action is random / chaotic)
+
+Step 3 — Combine (4 × 3 matrix):
+                  STRONG fractal       INDECISIVE          WEAK fractal
+  STRONG SMA      STRONG ACCUMULATION  ACCUMULATING       TOPPING
+  TRENDING SMA    ACCUMULATING         NO IDEA            DISTRIBUTING
+  WATCH SMA       BUILDING BASE        NO IDEA            DISTRIBUTION
+  SPECULATIVE     SPECULATIVE          SPECULATIVE        DISTRIBUTION
+
+Step 4 — Communicate the call in plain English. Lead with the tier, then the confirmation, then the resulting Rating. Quote the exact SMA levels and fractal numbers. Tell the subscriber what action this implies (own / watch / trim / exit) and at what price the next tier transition would occur.
+
+The SYNTHESIZED RATING line in the prompt body already tells you which cell the engine computed — you must AGREE with it (the math is deterministic). Your job is to explain WHY the cell, not to recompute it.
+
+Style:
+- Short, sharp, direct. Quant first, behavior second.
+- Mood (panic / euphoria / stealth build / grind) is informational — mention it if it adds color, but don't let it override the Rating.
+- Never hedge with "it depends" — commit to the call. The matrix forces a decision.
 
 The 10th Man Rule (REQUIRED):
 Every analysis must end with a "## 10th Man" section. Even when every
@@ -167,15 +199,13 @@ Reasoning: ${predictionResult.reasoning.join('; ')}`;
     }
   }
 
-  // Risk Range + Rating context. This is the entry-timing layer:
-  // Conviction says "do I want this direction"; Risk Range says
-  // "is this a good price right now." The Rating synthesizes both.
-  // We surface it explicitly so the AI narrative addresses entry
-  // timing (LRR/TRR band, volume confirmation) and not just direction.
+  // Trading Range (renamed from Risk Range) — entry-timing layer.
+  // The SMA tier tells you whether to be in/out; the Trading Range
+  // tells you whether NOW is a good price within the implied range.
   if (riskRange && Number.isFinite(riskRange.lrr) && Number.isFinite(riskRange.trr)) {
     const pos = Number.isFinite(riskRange.range_pos) ? riskRange.range_pos : 0.5;
-    const posLabel = pos <= 0.25 ? 'BOTTOM of band — buy zone'
-      : pos >= 0.75 ? 'TOP of band — trim zone'
+    const posLabel = pos <= 0.25 ? 'BOTTOM of band — favorable entry'
+      : pos >= 0.75 ? 'TOP of band — stretched, trim zone'
       : pos <= 0.40 ? 'lower half'
       : pos >= 0.60 ? 'upper half'
       : 'mid-band';
@@ -188,31 +218,43 @@ Reasoning: ${predictionResult.reasoning.join('; ')}`;
       : '5d/50d volume ratio = n/a';
     prompt += `
 
-RISK RANGE (P/V/V band — Hedgeye-style approximation):
-- Probable trading range: $${riskRange.lrr.toFixed(2)} (LRR) – $${riskRange.trr.toFixed(2)} (TRR)
-- Today's price position: ${(pos * 100).toFixed(0)}% of band — ${posLabel}
+TRADING RANGE (15-day probable range from volatility + lacunarity):
+- Range: $${riskRange.lrr.toFixed(2)} (LRR) – $${riskRange.trr.toFixed(2)} (TRR)
+- Today's position: ${(pos * 100).toFixed(0)}% of band — ${posLabel}
 - Realized vol (σ, 15-bar): ${Number.isFinite(riskRange.realized_vol) ? (riskRange.realized_vol * 100).toFixed(2) + '%' : 'n/a'}
 - ${volTxt}`;
   }
   if (rating && rating.rating) {
     prompt += `
 
-SYNTHESIZED RATING: ${rating.rating}${rating.reason ? ` — ${rating.reason}` : ''}`;
+SYNTHESIZED RATING: ${rating.rating}${rating.tier ? ` (tier=${rating.tier}, fractal=${rating.confirmation})` : ''}${rating.reason ? ` — ${rating.reason}` : ''}
+This Rating came from the deterministic 4×3 matrix (SMA tier × fractal
+confirmation). You must AGREE with it; your job is to explain WHY the
+matrix landed here, not to override it.`;
   }
 
   prompt += `
 
-Analyze the psychological footprint. Name the mood. Predict the next break.
-If a SETUP PHASE is provided, explicitly address it: is this stock in the
-quiet build-up before a move (ACCUMULATING), the breakout itself, an
-extended trend, or a stable regime? Use the SMA ladder to support the read.
+ANALYSIS — apply the 1880 Quant Analyzer reasoning chain:
 
-If a RISK RANGE block is provided, address ENTRY TIMING explicitly: is
-today's price near LRR (good entry), near TRR (better to wait or trim),
-or mid-band (no edge)? Does volume confirm the move? A bullish read at
-the top of the band with thin volume is fundamentally different from a
-bullish read at the bottom of the band with confirmed participation —
-the AI Take should make this distinction concrete with specific levels.
+Step 1: State the SMA tier explicitly. Quote the price and the 15/62/200-day
+levels. Is the stock above or below each? Which tier does that put it in
+(SPECULATIVE / WATCH / TRENDING / STRONG)?
+
+Step 2: State the fractal confirmation. Quote Hurst, Box dim, and Λ. How
+many of the three gates (H ≥ 0.55, D ≤ 1.20, Λ ≤ 1.25) does this stock
+pass? Is the trend STRONG / INDECISIVE / WEAK in confirmation?
+
+Step 3: Combine into the Rating (which is provided in SYNTHESIZED RATING).
+Explain what that Rating implies for action: accumulate, watch, trim, or exit.
+
+Step 4: If a TRADING RANGE block is provided, address entry timing — is
+today's price near LRR (favorable entry), near TRR (stretched), or mid-
+band (no edge within the Rating's broader call)? Does volume confirm?
+
+Step 5: Name the price level where the next tier transition would occur
+(e.g. "loses the 200-day at $X, demotes to SPECULATIVE" or "reclaims the
+62-day at $Y, promotes to TRENDING").
 
 Then — REQUIRED — close with a "## 10th Man" section that argues the
 strongest specific case AGAINST your main read and names the concrete

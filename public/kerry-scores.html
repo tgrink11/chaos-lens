@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kerry's Fractal Scores</title>
+    <title>1880 Quant Analyzer</title>
     <link rel="icon" type="image/png" href="/logo.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -15,13 +15,14 @@
       .sort-arrow { display: inline-block; width: 0.6em; margin-left: 0.25em; color: #2563eb; }
       tbody tr:hover { background: #f8fafc; }
 
-      /* Simple/Detailed view toggle: when the table has the .simple-view
-         class, hide all elements tagged .detail-only. Conversely .simple-only
-         elements (the Why column) are hidden by default and revealed only
-         when an ancestor has .simple-view. */
-      .simple-view .detail-only { display: none; }
-      .simple-only { display: none; }
-      .simple-view .simple-only { display: table-cell; }
+      /* Two-row table header for the 1880 Quant Analyzer column groups.
+         The .group-header row sits above the per-column header row and
+         spans the columns belonging to a logical group (Fractals / Trend).
+         Visual border separates groups without needing colspan tricks
+         everywhere in the body rows. */
+      .group-header th { border-bottom: 1px solid #cbd5e1; }
+      .col-group-fractals { background: #fefce8; } /* subtle yellow tint */
+      .col-group-trend    { background: #f0f9ff; } /* subtle blue tint */
     </style>
   </head>
   <body class="bg-slate-50 text-slate-900">
@@ -30,9 +31,9 @@
         <div class="flex items-center gap-4">
           <img src="/logo.png" alt="Best of US Investors" class="h-14 w-auto" />
           <div>
-            <h1 class="text-2xl font-semibold tracking-tight">Kerry's Fractal Scores</h1>
+            <h1 class="text-2xl font-semibold tracking-tight">1880 Quant Analyzer</h1>
             <p class="text-sm text-slate-500 mt-0.5">
-              Daily chaos-lens analysis of the Tell Sheet + Watchlist · refreshed weekdays after market close
+              Daily quantitative analysis of the Tell Sheet + Watchlist · refreshed weekdays after market close
             </p>
           </div>
         </div>
@@ -51,7 +52,7 @@
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex items-center text-sm font-medium text-red-700 hover:text-red-800 border border-red-200 hover:border-red-300 bg-red-50 hover:bg-red-100 rounded-md px-3 py-1.5 transition-colors"
-            title="Open Kerry's Fractal Analyzer walkthrough on YouTube (opens in a new tab)"
+            title="Open the 1880 Quant Analyzer walkthrough on YouTube (opens in a new tab)"
           >
             <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-1.5" aria-hidden="true">
               <path d="M21.582 6.186a2.506 2.506 0 0 0-1.768-1.768C18.254 4 12 4 12 4s-6.254 0-7.814.418a2.506 2.506 0 0 0-1.768 1.768C2 7.746 2 12 2 12s0 4.254.418 5.814a2.506 2.506 0 0 0 1.768 1.768C5.746 20 12 20 12 20s6.254 0 7.814-.418a2.506 2.506 0 0 0 1.768-1.768C22 16.254 22 12 22 12s0-4.254-.418-5.814zM10 15.5v-7l6 3.5-6 3.5z"/>
@@ -91,126 +92,98 @@
           <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">What this page does</h2>
             <p>
-              Every weekday after the market closes, this page automatically analyzes every stock on
-              Kerry's Tell Sheet and Watchlist. It looks at two years of price action for each one and
-              gives you a clear, one-word answer: <strong>BUY, ADD, DIP, HOLD, TRIM, or SELL</strong>.
-              That answer is the <strong>Rating</strong> column, and it's the only column you need to
-              read to use this page well. Everything else exists to explain or back up the Rating.
+              Every weekday after the market closes, the 1880 Quant Analyzer reviews every stock on
+              Kerry's Tell Sheet, Watchlist, and BUS! Research lists. For each one, it asks two
+              independent questions, then combines them into a single Rating that tells you whether
+              the stock is <strong>accumulating</strong>, <strong>distributing</strong>, or showing
+              no clear pattern.
             </p>
-            <p class="mt-3 text-slate-600">
-              <strong>One score, not five.</strong> If you toggle to Detailed view you'll see other
-              named scores — Conviction, Setup, Mood, Hurst, and so on. <em>Those are inputs that the
-              Rating already absorbed when it was computed.</em> They are not separate recommendations
-              that compete with the Rating. The Rating is the synthesis; everything else is the
-              ingredient list. If they ever look like they disagree, trust the Rating — it has the
-              final word because it sees all the inputs together.
+            <p class="mt-3">
+              The Rating column is the one column you need to read. Every other column is an
+              <em>input</em> that fed into the Rating — they're there for transparency, not as
+              competing recommendations.
             </p>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">What each Rating means</h2>
-            <div class="space-y-2 ml-1">
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800 font-bold ring-1 ring-emerald-400 mr-2">BUY</span>
-                Strong bullish setup. Direction is confirmed across short, medium, and long terms; the
-                price is at the low end of its recent trading range; and the underlying price action
-                shows a real, persistent trend (not just noise). The model's strongest "act now" call.</div>
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 mr-2">ADD</span>
-                Same direction as BUY, but the price is in the lower half of its range instead of the
-                bottom 25%. Good place to add to a position you already own.</div>
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-sky-100 text-sky-800 ring-1 ring-sky-300 mr-2">DIP</span>
-                Pulled back to support, long-term trend still intact, price action confirms a real
-                trend — but conviction hasn't fully turned bullish yet. <em>Watch list</em> candidate.
-                Wait for the momentum to confirm before buying.</div>
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 mr-2">HOLD</span>
-                No clear edge. Either signals are mixed, price is mid-range, or the trend hasn't been
-                confirmed. Don't initiate a new position; existing positions are fine to keep.</div>
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-orange-100 text-orange-800 mr-2">TRIM</span>
-                Bullish stock but the price has rallied to the top of its range — you'd be buying near
-                a short-term peak. Take some profits, don't add. (If volume strongly confirms the
-                breakout, the model softens this to HOLD instead.)</div>
-              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 font-semibold mr-2">SELL</span>
-                Either the price broke below its 200-day moving average — the long-term support line
-                that defines "still trending" — or bearish direction is confirmed with price in the
-                upper half of its range. Exit the position.</div>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">The two questions, and how they combine</h2>
+
+            <p class="font-semibold text-slate-900 mt-2">Question 1: Where does the price sit relative to its moving averages? (the "SMA tier")</h3>
+            <ul class="ml-5 mt-2 space-y-1 list-disc">
+              <li><strong>SPECULATIVE</strong> — price is below the 200-day SMA. Nothing structurally good happens below the line of last resort.</li>
+              <li><strong>WATCH</strong> — price has reclaimed the 200-day but not yet the 62-day. Early-stage recovery.</li>
+              <li><strong>TRENDING</strong> — price is above both the 62-day and 200-day SMAs. The medium-term trend is up.</li>
+              <li><strong>STRONG</strong> — price is above all three (15 / 62 / 200), with the SMAs themselves stacked bullishly (15 &gt; 62 &gt; 200). Best structural setup.</li>
+            </ul>
+
+            <p class="font-semibold text-slate-900 mt-4">Question 2: Does the price action confirm a real trend? (the "fractal confirmation")</h3>
+            <p class="ml-1 mt-1 text-slate-600">A stock can be above its moving averages and still be wandering randomly. Three fractal measurements check whether the trend is <em>real</em>:</p>
+            <ul class="ml-5 mt-2 space-y-1 list-disc">
+              <li><strong>Hurst</strong> ≥ 0.55 — price persists in one direction (not a random walk).</li>
+              <li><strong>Box dim</strong> ≤ 1.20 — price follows a smooth path (not chaotic).</li>
+              <li><strong>Lambda</strong> ≤ 1.25 — volatility is uniform (not gappy / clustered).</li>
+            </ul>
+            <p class="ml-1 mt-2">
+              All three pass → <strong>STRONG</strong> confirmation. One or two pass → <strong>INDECISIVE</strong>. Zero pass → <strong>WEAK</strong> (random or chaotic price action).
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">The Rating matrix</h2>
+            <p class="mb-2">The two questions combine into one of 8 Ratings. Use this table to read what any combination means:</p>
+            <div class="overflow-x-auto -mx-1">
+              <table class="text-xs border border-slate-300 rounded">
+                <thead class="bg-slate-100">
+                  <tr><th class="px-2 py-1.5 text-left border-b border-slate-300">SMA tier ↓ / Fractal →</th><th class="px-2 py-1.5 border-b border-slate-300">STRONG confirmation</th><th class="px-2 py-1.5 border-b border-slate-300">INDECISIVE</th><th class="px-2 py-1.5 border-b border-slate-300">WEAK confirmation</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                  <tr><td class="px-2 py-1.5 font-semibold">STRONG (above 15/62/200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-600 text-white font-bold">STRONG ACCUMULATION</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold">ACCUMULATING</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800">TOPPING</span></td></tr>
+                  <tr><td class="px-2 py-1.5 font-semibold">TRENDING (above 62 &amp; 200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold">ACCUMULATING</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">NO IDEA</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-200 text-orange-900 font-semibold">DISTRIBUTING</span></td></tr>
+                  <tr><td class="px-2 py-1.5 font-semibold">WATCH (above 200 only)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700">BUILDING BASE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">NO IDEA</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold">DISTRIBUTION</span></td></tr>
+                  <tr><td class="px-2 py-1.5 font-semibold">SPECULATIVE (below 200)</td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">SPECULATIVE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800">SPECULATIVE</span></td><td class="px-2 py-1.5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold">DISTRIBUTION</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">What each Rating means for action</h2>
+            <div class="space-y-1.5 ml-1">
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-600 text-white font-bold mr-2">STRONG ACCUMULATION</span> <strong>Own / add aggressively.</strong> Clearest, most-confirmed setup.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-100 text-emerald-800 font-semibold mr-2">ACCUMULATING</span> <strong>Own / add on weakness.</strong> Trend is real and intact.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 mr-2">BUILDING BASE</span> <strong>Watch.</strong> Early-stage recovery; wait for 62-day cross before adding aggressively.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 mr-2">NO IDEA</span> <strong>Hold what you have.</strong> Mixed signals; don't initiate.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-100 text-orange-800 mr-2">TOPPING</span> <strong>Trim into strength.</strong> Price still stacked bullishly but fractals are weakening — late-stage.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-orange-200 text-orange-900 font-semibold mr-2">DISTRIBUTING</span> <strong>Reduce exposure.</strong> Selling pressure starting beneath the trend.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-800 font-bold mr-2">DISTRIBUTION</span> <strong>Exit / avoid.</strong> Clear distribution; either lost the 200-day or fractal structure broken down.</div>
+              <div><span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 mr-2">SPECULATIVE</span> <strong>Speculative reclaim plays only.</strong> Below the 200-day; structurally dead money in most cases.</div>
             </div>
           </section>
 
           <section>
             <h2 class="text-base font-semibold text-slate-900 mb-2">Step by step: how to use the page each morning</h2>
             <ol class="list-decimal ml-5 space-y-2">
-              <li><strong>Open the page.</strong> Default view is "Simple" — fewer columns, less noise.
-                The Rating column tells you the bottom line; the Why column explains it in one sentence.</li>
-              <li><strong>Sort by Rating</strong> (already the default). The top of the list is BUY → ADD
-                → DIP → HOLD → TRIM → SELL. You're looking for action at the top.</li>
-              <li><strong>If you see a BUY or ADD</strong>, read the Why. It'll tell you in plain English
-                what's lined up. If the Mood column also shows <em>Euphoria</em> or <em>Stealth Build</em>,
-                that backs up the call.</li>
-              <li><strong>For any stock you want to dig deeper on</strong>, click <em>Get AI take</em>.
-                Claude analyzes the same data the table sees and writes a short narrative — including a
-                required "10th Man" section that argues the contrarian case (what would make this wrong).
-                First click on a stock costs about one cent; the answer caches for 24 hours so re-opening
-                it the same day is free.</li>
-              <li><strong>Use the filter pills</strong> to narrow to <em>Tell Sheet</em> only,
-                <em>Watchlist</em> only, or other lists. Or type a ticker into "Filter by symbol" to
-                jump straight to one stock.</li>
-              <li><strong>To analyze a stock that's not on any list</strong>, type its ticker into
-                "Analyze any ticker" and hit Analyze. You'll get a fresh row with the same Rating and
-                AI Take features as the rest of the table.</li>
+              <li><strong>Open the page.</strong> The Rating column tells you the bottom line. Hover any Rating badge for a one-sentence plain-English explanation.</li>
+              <li><strong>Sort is already Rating descending</strong> — STRONG ACCUMULATION at the top, DISTRIBUTION / SPECULATIVE at the bottom. Your accumulation candidates are at the top of the list.</li>
+              <li><strong>The Fractals: Trend Confirmation columns</strong> (yellow tint) show the inputs that drove the fractal confirmation half of the Rating — the directional reads, H / D / Λ, Conviction, and Mood.</li>
+              <li><strong>The Trend columns</strong> (blue tint) show the 15 / 62 / 200-day SMAs with green ▲ if price is above and red ▼ if below. That's how you see at a glance which tier a stock is in.</li>
+              <li><strong>For any stock you want to dig deeper on</strong>, click <em>Get AI take</em>. Claude follows the same 4-step reasoning the page uses (SMA tier → fractal confirmation → combine → action implication), and closes with a required "10th Man" section arguing the contrarian case.</li>
+              <li><strong>Filter pills</strong> narrow to Tell Sheet / Watchlist / BUS! Research. Search box jumps to a specific ticker. "Analyze any ticker" runs the same analysis on any 1–5 letter US symbol.</li>
             </ol>
           </section>
 
           <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">When the page says "no actionable buys"</h2>
+            <h2 class="text-base font-semibold text-slate-900 mb-2">The Trading Range column</h2>
             <p>
-              Some days the table will have very few BUY ratings. <strong>This is information, not a
-              failure.</strong> The model only fires BUY when four things line up at once:
-              direction is bullish, price is above the 62-day and 200-day moving averages, the price
-              action confirms a real trend (not random walk), and the price is at a favorable entry
-              point. On days when the market is choppy, stretched, or breaking down, very few stocks
-              clear all four gates. The right move is often to wait. Patience is a feature.
+              Separate from the Rating, the Trading Range column shows the probable 15-day price band
+              (LRR – TRR) given current volatility. The marker shows where today's close sits within
+              the band: bottom = favorable entry, middle = no edge, top = stretched.
             </p>
-            <p class="mt-2">
-              Use the <strong>DIP</strong> column as your watch list — those stocks are setting up but
-              haven't confirmed yet. Tomorrow's scan might turn some of them into BUYs.
-            </p>
-          </section>
-
-          <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">The other columns at a glance</h2>
-            <ul class="space-y-1.5 ml-1">
-              <li><strong>Symbol</strong>: the ticker.</li>
-              <li><strong>List</strong>: which list this stock came from (Tell Sheet, Watchlist, BUS Research, or Custom if you typed it in).</li>
-              <li><strong>Price</strong>: most recent daily close.</li>
-              <li><strong>Why</strong>: plain-English explanation of the Rating in one sentence.</li>
-              <li><strong>AI Take</strong>: click to run Claude on this single stock. Opens a detailed narrative under the row.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 class="text-base font-semibold text-slate-900 mb-2">For the curious: how the engine actually decides</h2>
-            <p>
-              Behind the Rating, the engine combines four signals. You don't need to read this section to
-              use the page — but if you're curious why a stock got the call it did, here's the logic:
-            </p>
-            <ol class="list-decimal ml-5 space-y-1.5 mt-2">
-              <li><strong>Direction</strong> (the "Conviction" score in Detailed view): is the stock
-                trending up or down across short, medium, and long term?</li>
-              <li><strong>Trend strength</strong>: is the price above the 62-day moving average (medium-
-                term support) and above the 200-day (long-term support)? <em>Nothing good happens below
-                the 200-day.</em> A break below it triggers SELL automatically.</li>
-              <li><strong>Real trend vs. noise</strong>: the engine checks the price's mathematical
-                "fingerprint" — does it persist in one direction (Hurst), does it follow a smooth path
-                (Box dimension), and is the volatility uniform (Lacunarity)? If yes to all three, the
-                trend is "confirmed." If no, the stock is just bouncing around and doesn't deserve a BUY
-                even if the directional signals look bullish.</li>
-              <li><strong>Entry price</strong> (the Risk Range): given recent volatility, what's a
-                reasonable trading range over the next ~15 days? You buy near the low end, trim near the
-                high end.</li>
-            </ol>
-            <p class="mt-3">
-              All four must align for a BUY. Toggle to <strong>Detailed view</strong> at the top of the
-              page if you want to see every input column the engine uses. None of it is necessary for
-              following the Rating, but it's there for transparency.
+            <p class="mt-2 text-slate-600">
+              The Rating tells you <em>whether</em> to be in the stock; the Trading Range tells you
+              <em>when</em> within the next 15 days the price is at a good entry. Use them together: an
+              ACCUMULATING rating at the bottom of its Trading Range is the highest-quality long signal
+              you can find.
             </p>
           </section>
 
@@ -250,20 +223,9 @@
     </header>
 
     <main class="px-6 py-6">
-      <!-- View-mode toggle (Simple is default; Detailed surfaces all analytical
-           columns for power users). Choice persists to localStorage. -->
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-xs uppercase tracking-wider text-slate-500 font-medium">View:</span>
-        <div class="inline-flex rounded-md shadow-sm border border-slate-300 overflow-hidden">
-          <button id="view-simple" class="view-toggle px-3 py-1.5 text-sm font-medium transition-colors" type="button">Simple</button>
-          <button id="view-detailed" class="view-toggle px-3 py-1.5 text-sm font-medium border-l border-slate-300 transition-colors" type="button">Detailed</button>
-        </div>
-        <span class="text-xs text-slate-500 ml-2">
-          Simple view shows just the action (Buy / Add / Dip / Hold / Trim / Sell) and why. Switch to Detailed for the full analytical breakdown.
-        </span>
-      </div>
-
       <!-- Filter pills + sort actions -->
+      <!-- (Simple/Detailed toggle dropped: the new layout is the canonical
+           view; no more two-mode UX since the column set is fixed.) -->
       <div class="flex items-center gap-2 mb-4 flex-wrap">
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="tellsheet">Tell Sheet</button>
@@ -311,28 +273,33 @@
       <!-- Table -->
       <div id="table-wrap" class="hidden bg-white border border-slate-200 rounded-lg shadow-sm overflow-x-auto">
         <table class="w-full text-sm">
+          <!-- Two-row header: top row spans the column-group labels
+               ("Fractals: Trend Confirmation" / "Trend"), bottom row is
+               the per-column sortable headers. The four standalone columns
+               (Symbol / Price / List / Rating / Trading Range / AI Take)
+               use rowspan=2 so they vertically span both rows. -->
           <thead class="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-600">
+            <tr class="group-header">
+              <th rowspan="2" class="sortable px-2 py-2.5 text-left align-middle" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
+              <th rowspan="2" class="sortable px-2 py-2.5 text-right align-middle" data-sort="price">Price<span class="sort-arrow"></span></th>
+              <th rowspan="2" class="sortable px-2 py-2.5 text-left align-middle" data-sort="list_type">List<span class="sort-arrow"></span></th>
+              <th rowspan="2" class="sortable px-2 py-2.5 text-center align-middle" data-sort="rating" title="1880 Quant Analyzer Rating. Synthesis of: (1) SMA tier — where price sits relative to the 15 / 62 / 200-day moving averages, and (2) fractal confirmation — whether Hurst / Box dim / Lambda confirm a real trend. The combined Rating tells you whether a stock is accumulating, distributing, or indecisive.">Rating<span class="sort-arrow"></span></th>
+              <th colspan="7" class="col-group-fractals px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-yellow-800 border-l border-r border-slate-200">Fractals: Trend Confirmation</th>
+              <th colspan="3" class="col-group-trend px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-sky-800 border-r border-slate-200">Trend</th>
+              <th rowspan="2" class="sortable px-2 py-2.5 text-center align-middle" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR = low (buy zone), TRR = top (sell zone). Marker shows where today's close sits within the band.">Trading Range<span class="sort-arrow"></span></th>
+              <th rowspan="2" class="px-2 py-2.5 text-center align-middle" title="Click 'Get AI take' on any row to run Claude on that ticker. First click costs ~$0.01; cached for 24h.">AI Take</th>
+            </tr>
             <tr>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="symbol">Symbol<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left" data-sort="list_type">List<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right" data-sort="price">Price<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="short_term_direction">15-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="short_term_confidence">15d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="medium_term_direction">62-Day<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="medium_term_confidence">62d Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="prediction">Prediction<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="prediction_confidence">Pred Conf<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup.">Conviction<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-center" data-sort="rating" title="Synthesis of Conviction (direction) + Risk Range (price location) + Trend gate (price vs 62d/200d). BUY = bullish + bottom of band + uptrend. TRIM = bullish + top of band. SELL = price below 200d (tail break) or bearish conviction + top half of band.">Rating<span class="sort-arrow"></span></th>
-              <th class="px-2 py-2.5 text-left simple-only" title="Plain-English explanation of why this stock got its Rating.">Why</th>
-              <th class="sortable px-2 py-2.5 text-center detail-only" data-sort="range_pos" title="Probable trading range from volatility + lacunarity. LRR=low (buy zone) – TRR=top (sell zone). Marker shows where today's close sits. Click to sort by position-in-band (low = best entry).">Risk Range<span class="sort-arrow"></span></th>
-              <th class="px-2 py-2.5 text-center detail-only" title="Price vs 9 / 15 / 62 / 200-day simple moving averages. Green = price above the MA, red = below. Hover any pill for the actual MA value.">Trend</th>
-              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="setup" title="Setup phase: Accum = accumulation building (pre-breakout), Breakout = conviction just spiked + price above short MA stack, Extended = high conviction running for many days, Uptrend/Downtrend = mature trend in place.">Setup<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-left detail-only" data-sort="mood">Mood<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="hurst">H<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="box_dim">D<span class="sort-arrow"></span></th>
-              <th class="sortable px-2 py-2.5 text-right detail-only" data-sort="lambda">Λ<span class="sort-arrow"></span></th>
-              <th class="px-2 py-2.5 text-center" title="Click 'Get AI take' on any row to run Claude on that ticker. First click costs ~$0.01; cached for 24h so the same stock that day is free.">AI Take</th>
+              <th class="sortable col-group-fractals px-2 py-2 text-left border-l border-slate-200" data-sort="short_term_direction" title="15-day directional read. Bullish / Neutral / Bearish — derived from the short-term horizon engine.">15-Day<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-left" data-sort="medium_term_direction" title="62-day directional read. Bullish / Neutral / Bearish — derived from the medium-term horizon engine.">62-Day<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-right" data-sort="hurst" title="Hurst exponent. ≥ 0.55 = persistent trend (passes confirmation gate). 0.50 = random walk. < 0.50 = mean-reverting.">H<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-right" data-sort="box_dim" title="Higuchi fractal dimension. ≤ 1.20 = smooth trending path (passes confirmation gate). > 1.20 = chaotic / rough.">D<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-right" data-sort="lambda" title="Lacunarity. ≤ 1.25 = uniform volatility (passes confirmation gate). > 1.25 = clustered / gappy.">Λ<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-right" data-sort="conviction" title="Composite conviction score: rewards alignment of 15-day + 62-day + prediction + mood + low D. Positive = bullish setup, negative = bearish setup. Informational only — no longer drives the Rating.">Conv<span class="sort-arrow"></span></th>
+              <th class="sortable col-group-fractals px-2 py-2 text-left border-r border-slate-200" data-sort="mood" title="Algorithmic mood read. Euphoria / Stealth Build / Panic / Grind. Informational only — no longer drives the Rating.">Mood<span class="sort-arrow"></span></th>
+              <th class="col-group-trend px-2 py-2 text-center" title="15-day Simple Moving Average. Green pill = price above; red = below.">15 SMA</th>
+              <th class="col-group-trend px-2 py-2 text-center" title="62-day Simple Moving Average. The medium-term trend line — being above this puts a stock in the TRENDING tier.">62 SMA</th>
+              <th class="col-group-trend px-2 py-2 text-center border-r border-slate-200" title="200-day Simple Moving Average. The line of last resort — nothing structurally good happens below it.">200 SMA</th>
             </tr>
           </thead>
           <tbody id="rows" class="divide-y divide-slate-100"></tbody>
@@ -348,7 +315,7 @@
       // Rating logic lives in /public/rating-logic.js so the same file is
       // imported by both this page and the server's /api/ai-take endpoint.
       // No client/server drift possible: edit one place, both update.
-      import { RATING_CONFIG, RATING_ORDER, computeRating, entryQuality } from './rating-logic.js';
+      import { RATING_CONFIG, RATING_ORDER, RATING_BADGE_CLS, computeRating, entryQuality } from './rating-logic.js';
 
       const API_URL = '/api/kerry-scores';
 
@@ -599,30 +566,29 @@
       // today's price is above or below that SMA. Tooltip on each pill
       // shows the actual MA value so users can see the structure rather
       // than just a binary up/down.
+      // Single-SMA pill — used in the new layout where each SMA gets its
+      // own column. Shows the dollar value with a colored chevron
+      // indicating whether price is above (green ▲) or below (red ▼).
+      function smaPill(price, val, label) {
+        if (val == null || !Number.isFinite(val) || !Number.isFinite(price)) {
+          return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono bg-slate-100 text-slate-400" title="${label}-day SMA: insufficient history">—</span>`;
+        }
+        const above = price > val;
+        const cls = above ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800';
+        const arrow = above ? '▲' : '▼';
+        const pctGap = ((price - val) / val) * 100;
+        const tooltip = `${label}-day SMA: $${val.toFixed(2)} · price ${pctGap >= 0 ? '+' : ''}${pctGap.toFixed(1)}%`;
+        return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono ${cls}" title="${tooltip}">$${val.toFixed(2)} ${arrow}</span>`;
+      }
+
+      // Legacy combined-trend cell — kept for any external callers but
+      // no longer used in the row layout (each SMA now has its own column).
       function trendCellHtml(r) {
-        const price = r.price;
-        // 9-day SMA dropped — too noisy to carry signal. The 62-day is
-        // the make-or-break trend line, the 200-day is the line of last
-        // resort. 15-day kept as a near-term reference but in a smaller
-        // role visually (uncolored pills sit before the meaningful ones).
-        const mas = [
+        const pills = [
           { label: '15', val: r.sma_15 },
           { label: '62', val: r.sma_62 },
           { label: '200', val: r.sma_200 },
-        ];
-        const pills = mas.map(({ label, val }) => {
-          if (val == null || !Number.isFinite(val) || price == null) {
-            return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono bg-slate-100 text-slate-400" title="${label}-day SMA: insufficient history">${label} —</span>`;
-          }
-          const above = price > val;
-          const cls = above
-            ? 'bg-emerald-100 text-emerald-800'
-            : 'bg-red-100 text-red-800';
-          const arrow = above ? '▲' : '▼';
-          const pctGap = ((price - val) / val) * 100;
-          const tooltip = `${label}-day SMA: $${val.toFixed(2)} (price ${pctGap >= 0 ? '+' : ''}${pctGap.toFixed(1)}%)`;
-          return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] mono ${cls}" title="${tooltip}">${label} ${arrow}</span>`;
-        }).join(' ');
+        ].map(({ label, val }) => smaPill(r.price, val, label)).join(' ');
         return `<div class="flex gap-1 justify-center flex-wrap">${pills}</div>`;
       }
 
@@ -645,30 +611,27 @@
         return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${cfg.title}">${cfg.label}</span>`;
       }
 
-      // Rating pill — BUY (bold green) / ADD (green) / HOLD (slate) /
-      // TRIM (orange) / SELL (red). Color-coded by action urgency.
-      const RATING_CONFIG_UI = {
-        BUY:  { cls: 'bg-emerald-100 text-emerald-800 font-bold ring-1 ring-emerald-400' },
-        ADD:  { cls: 'bg-emerald-50 text-emerald-700' },
-        DIP:  { cls: 'bg-sky-100 text-sky-800 ring-1 ring-sky-300' },
-        HOLD: { cls: 'bg-slate-100 text-slate-600' },
-        TRIM: { cls: 'bg-orange-100 text-orange-800' },
-        SELL: { cls: 'bg-red-100 text-red-800 font-semibold' },
-      };
+      // Rating badge classes — imported from the shared rating-logic
+      // module so the badge colors stay in lock-step with the matrix.
+      // Local fallback for any unknown rating: muted slate.
+      function ratingBadgeCls(rating) {
+        return RATING_BADGE_CLS[rating] || 'bg-slate-100 text-slate-600';
+      }
 
       function ratingBadgeHtml(r) {
         const rating = r._rating;
         if (!rating) return '<span class="text-slate-400 text-xs">—</span>';
-        const cfg = RATING_CONFIG_UI[rating] || RATING_CONFIG_UI.HOLD;
-        const reason = (r._ratingReason || '').replace(/"/g, '&quot;');
+        const cls = ratingBadgeCls(rating);
+        // Subscriber-friendly explanation goes in the badge tooltip — saves
+        // the dedicated "Why" column, keeps the explanation one hover away.
+        const subscriberWhy = (r._subscriberReason || '').replace(/"/g, '&quot;');
         // Stale rows get a desaturated badge + clear "not current" tooltip
-        // so subscribers can never mistake a 22-day-old Rating for a fresh
-        // one. The Rating math is the same; only the visual + tooltip change.
+        // so subscribers can never mistake a stale Rating for a fresh one.
         if (r._isStale) {
           const staleReason = `STALE — last scored ${r._weekdaysOld} weekday(s) ago. Underlying market conditions have likely changed; do not trade on this Rating until it refreshes.`.replace(/"/g, '&quot;');
-          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}</span>`;
+          return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-slate-200 text-slate-500 line-through" title="${staleReason}">${rating}</span>`;
         }
-        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${cfg.cls}" title="${reason}">${rating}</span>`;
+        const eodBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${cls}" title="${subscriberWhy}">${rating}</span>`;
 
         // Intraday overlay: when r._intradayRating is set (populated by
         // the Intraday overlay button), render a second badge below the
@@ -677,7 +640,7 @@
         // surfaces the live price and updated range position.
         if (r._intradayRating && r._intradayPrice != null) {
           const iRating = r._intradayRating;
-          const iCfg = RATING_CONFIG_UI[iRating] || RATING_CONFIG_UI.HOLD;
+          const iCls = ratingBadgeCls(iRating);
           const iReason = (r._intradayRatingReason || '').replace(/"/g, '&quot;');
           const priceTxt = `$${r._intradayPrice.toFixed(2)}`;
           const changeTxt = r._intradayChangePct != null
@@ -696,7 +659,7 @@
               </div>
               <div class="flex items-center gap-1" title="${iReason}">
                 <span class="text-[9px] uppercase tracking-wide ${differs ? 'text-purple-700 font-semibold' : 'text-slate-400'}">${arrow} Live ${priceTxt}${changeTxt}</span>
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs ${iCfg.cls}">${iRating}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] ${iCls}">${iRating}</span>
               </div>
             </div>
           `;
@@ -783,8 +746,6 @@
           : conv <= -1.0 ? 'text-red-600'
           : 'text-slate-500';
 
-        const whyText = r._subscriberReason || '—';
-        const whyEscaped = String(whyText).replace(/"/g, '&quot;');
         // Stale chip: shown on rows whose scanned_at is more than 3
         // weekdays behind. The cron silently failed for this symbol;
         // the displayed Rating + numbers reflect data from N weekdays
@@ -793,30 +754,33 @@
         const staleChip = r._isStale
           ? `<div class="mt-0.5"><span class="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300" title="This row hasn't refreshed in ${r._weekdaysOld} weekdays. Underlying market conditions have likely moved since then.">⚠ stale ${r._weekdaysOld}d</span></div>`
           : '';
+        // 1880 Quant Analyzer column order:
+        //   Symbol | Price | List | Rating | [Fractals group: 15-Day,
+        //   62-Day, H, D, Λ, Conv, Mood] | [Trend group: 15 SMA, 62 SMA,
+        //   200 SMA] | Trading Range | AI Take
+        // The Fractals group cells get .col-group-fractals (yellow tint)
+        // and Trend cells get .col-group-trend (blue tint) so the visual
+        // grouping carries from the header into the body.
         return `
           <tr${rowAttrs}>
             <td class="px-2 py-2 mono font-semibold">${r.symbol}${staleChip}</td>
-            <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
             <td class="px-2 py-2 text-right mono num">${fmtPrice(r.price)}</td>
-            <td class="px-3 py-2 detail-only">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.short_term_confidence)}</td>
-            <td class="px-3 py-2 detail-only">${pill(dir62, DIRECTION_COLOR[dir62] || DIRECTION_COLOR.neutral)}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.medium_term_confidence)}</td>
-            <td class="px-3 py-2 detail-only">${pill(PREDICTION_LABEL[pred] || pred, PREDICTION_COLOR[pred] || 'bg-slate-100 text-slate-700')}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtConf(r.prediction_confidence)}</td>
-            <td class="px-2 py-2 text-right mono num detail-only ${convClass}">
+            <td class="px-3 py-2">${pill(listLabel, listColor)}</td>
+            <td class="px-2 py-2 text-center">${ratingBadgeHtml(r)}</td>
+            <td class="col-group-fractals px-2 py-2 border-l border-slate-100">${pill(dir15, DIRECTION_COLOR[dir15] || DIRECTION_COLOR.neutral)}</td>
+            <td class="col-group-fractals px-2 py-2">${pill(dir62, DIRECTION_COLOR[dir62] || DIRECTION_COLOR.neutral)}</td>
+            <td class="col-group-fractals px-2 py-2 text-right mono num">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
+            <td class="col-group-fractals px-2 py-2 text-right mono num">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
+            <td class="col-group-fractals px-2 py-2 text-right mono num">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
+            <td class="col-group-fractals px-2 py-2 text-right mono num ${convClass}">
               ${fmtConviction(conv)}
               ${convictionHistoryHtml(r.conviction_history)}
             </td>
-            <td class="px-2 py-2 text-center">${ratingBadgeHtml(r)}</td>
-            <td class="px-3 py-2 text-sm text-slate-700 simple-only max-w-md" title="${whyEscaped}">${whyText}</td>
-            <td class="px-2 py-2 text-center detail-only">${riskRangeCellHtml(r)}</td>
-            <td class="px-2 py-2 text-center detail-only">${trendCellHtml(r)}</td>
-            <td class="px-2 py-2 detail-only">${setupBadgeHtml(r.setup)}</td>
-            <td class="px-2 py-2 text-xs font-medium detail-only ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.hurst)}${pctBadge(r._pct_hurst)}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.box_dim)}${pctBadge(r._pct_box_dim)}</td>
-            <td class="px-2 py-2 text-right mono num detail-only">${fmtNum(r.lambda)}${pctBadge(r._pct_lambda)}</td>
+            <td class="col-group-fractals px-2 py-2 text-xs font-medium border-r border-slate-100 ${MOOD_COLOR[mood] || 'text-slate-700'}">${MOOD_LABEL[mood] || mood}</td>
+            <td class="col-group-trend px-2 py-2 text-center">${smaPill(r.price, r.sma_15, '15')}</td>
+            <td class="col-group-trend px-2 py-2 text-center">${smaPill(r.price, r.sma_62, '62')}</td>
+            <td class="col-group-trend px-2 py-2 text-center border-r border-slate-100">${smaPill(r.price, r.sma_200, '200')}</td>
+            <td class="px-2 py-2 text-center">${riskRangeCellHtml(r)}</td>
             <td class="px-2 py-2 text-center text-xs">${aiTakeCell}</td>
           </tr>
         `;
@@ -826,7 +790,7 @@
       function customLoadingRowHtml(symbol) {
         return `
           <tr class="bg-amber-50/50 border-l-4 border-amber-400">
-            <td colspan="20" class="px-4 py-3 text-sm text-slate-600">
+            <td colspan="16" class="px-4 py-3 text-sm text-slate-600">
               <span class="inline-block w-3 h-3 border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin mr-2 align-middle"></span>
               Analyzing <span class="mono font-semibold">${symbol}</span>… (fetching 2y of price history + running fractals)
             </td>
@@ -837,7 +801,7 @@
       function customErrorRowHtml(symbol, error) {
         return `
           <tr class="bg-red-50 border-l-4 border-red-400">
-            <td colspan="20" class="px-4 py-3 text-sm">
+            <td colspan="16" class="px-4 py-3 text-sm">
               <div class="flex items-center justify-between gap-3">
                 <div class="text-red-700">
                   <strong class="mono">${symbol}</strong>: ${error}
@@ -942,45 +906,8 @@
         });
       });
 
-      // ───── View-mode toggle (Simple ↔ Detailed) ─────
-      //
-      // Simple is the default: shows just Symbol / List / Price / Rating /
-      // Why / Mood / AI Take. Detailed surfaces every analytical column.
-      // Choice persists to localStorage so a subscriber's preference
-      // survives reloads.
-      const VIEW_KEY = 'kerry-scores-view-mode';
-      const tableEl = document.querySelector('#table-wrap table');
-      const btnSimple = document.getElementById('view-simple');
-      const btnDetailed = document.getElementById('view-detailed');
-
-      function applyViewMode(mode) {
-        const simple = mode !== 'detailed';
-        if (tableEl) tableEl.classList.toggle('simple-view', simple);
-        btnSimple.classList.toggle('bg-slate-900', simple);
-        btnSimple.classList.toggle('text-white', simple);
-        btnSimple.classList.toggle('bg-white', !simple);
-        btnSimple.classList.toggle('text-slate-700', !simple);
-        btnDetailed.classList.toggle('bg-slate-900', !simple);
-        btnDetailed.classList.toggle('text-white', !simple);
-        btnDetailed.classList.toggle('bg-white', simple);
-        btnDetailed.classList.toggle('text-slate-700', simple);
-        // When switching mid-session, drop any open AI-take expansions
-        // because their colspan was built for the prior view's column
-        // count and would visually corrupt the layout otherwise.
-        document.querySelectorAll('tr[data-expansion]').forEach(r => r.remove());
-      }
-
-      const initialMode = localStorage.getItem(VIEW_KEY) || 'simple';
-      applyViewMode(initialMode);
-
-      btnSimple.addEventListener('click', () => {
-        localStorage.setItem(VIEW_KEY, 'simple');
-        applyViewMode('simple');
-      });
-      btnDetailed.addEventListener('click', () => {
-        localStorage.setItem(VIEW_KEY, 'detailed');
-        applyViewMode('detailed');
-      });
+      // (Simple/Detailed view toggle removed — the 1880 Quant Analyzer
+      // uses one canonical column layout. No more two-mode UX.)
 
       // "Highest Conviction" button — single-click sort by composite conviction
       // descending (top-bullish at top). Click again to flip to ascending
