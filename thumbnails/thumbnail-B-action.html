@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>1880 Quant Analyzer — Thumbnail B (Action)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin: 0; background: #fef2f2; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .thumb {
+    width: 1280px; height: 720px;
+    position: relative;
+    background: linear-gradient(135deg, #fef2f2 0%, #fff 50%, #f0fdf4 100%);
+    overflow: hidden;
+  }
+  .stripe {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent 60%, rgba(220, 38, 38, 0.04) 100%),
+      repeating-linear-gradient(45deg, transparent 0px, transparent 20px, rgba(220, 38, 38, 0.025) 20px, rgba(220, 38, 38, 0.025) 21px);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="thumb flex items-center">
+
+  <div class="stripe"></div>
+
+  <!-- Left side — the big warning -->
+  <div class="relative flex-1 pl-16 z-10">
+    <div class="text-slate-500 text-lg font-bold tracking-widest mb-4 uppercase">Best of Us Investors · 1880 Quant Analyzer</div>
+
+    <div class="inline-block px-8 py-4 mb-6 rounded-2xl font-black text-white shadow-2xl"
+         style="background:#dc2626; box-shadow:0 0 0 4px white, 0 0 0 8px #dc2626, 0 25px 50px -12px rgba(220,38,38,0.5); font-size:88px; letter-spacing:-0.02em; line-height:1;">
+      DON'T<br/>CHASE
+    </div>
+
+    <h2 class="text-slate-900 font-bold leading-tight mb-3" style="font-size: 56px; letter-spacing: -0.02em;">
+      When the model says <span class="text-red-600">stop</span>,<br/>
+      it means stop.
+    </h2>
+    <p class="text-slate-600 text-xl max-w-xl">
+      The new rating system that tells you when a parabolic stock has run too far.
+    </p>
+  </div>
+
+  <!-- Right side — visualization of price vs SMA -->
+  <div class="relative w-[420px] pr-12 z-10">
+    <div class="bg-white rounded-2xl p-7 shadow-2xl">
+      <div class="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Example: DELL</div>
+      <div class="text-3xl font-bold text-slate-900 mono mb-4" style="font-family: ui-monospace, SFMono-Regular, monospace;">
+        $435.31
+      </div>
+
+      <div class="space-y-2 text-sm font-mono">
+        <div class="flex items-center justify-between p-2 rounded bg-emerald-50">
+          <span class="text-slate-700">15-day SMA</span>
+          <span class="font-bold text-emerald-700">$299 ▲ +45%</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded bg-emerald-50">
+          <span class="text-slate-700">62-day SMA</span>
+          <span class="font-bold text-emerald-700">$213 ▲ +104%</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded bg-red-50 ring-2 ring-red-300">
+          <span class="text-slate-700 font-bold">200-day SMA</span>
+          <span class="font-bold text-red-700">$157 ▲ +176%</span>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-200">
+        <div class="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Rating</div>
+        <div class="inline-flex items-center px-3 py-1 rounded text-sm font-black text-white" style="background:#dc2626;">
+          DON'T CHASE
+        </div>
+        <div class="text-xs text-slate-500 mt-1.5 italic">structurally strong accumulation</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
