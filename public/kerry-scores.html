@@ -169,7 +169,7 @@
               <li><strong>The Fractals: Trend Confirmation columns</strong> (yellow tint) show the inputs that drove the fractal confirmation half of the Rating — the directional reads, H / D / Λ, Conviction, and Mood.</li>
               <li><strong>The Trend columns</strong> (blue tint) show the 15 / 62 / 200-day SMAs with green ▲ if price is above and red ▼ if below. That's how you see at a glance which tier a stock is in.</li>
               <li><strong>For any stock you want to dig deeper on</strong>, click <em>Get AI take</em>. Claude follows the same 4-step reasoning the page uses (SMA tier → fractal confirmation → combine → action implication), and closes with a required "10th Man" section arguing the contrarian case.</li>
-              <li><strong>Filter pills</strong> narrow to Tell Sheet / Watchlist / BUS! Research. Search box jumps to a specific ticker. "Analyze any ticker" runs the same analysis on any 1–5 letter US symbol.</li>
+              <li><strong>Filter pills</strong> narrow to Tell Sheet / Watchlist / ETFs / BUS! Research. Search box jumps to a specific ticker. "Analyze any ticker" runs the same analysis on any 1–5 letter US symbol.</li>
             </ol>
           </section>
 
@@ -259,6 +259,7 @@
         <button class="filter-pill active px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-slate-900 text-white" data-filter="all">All</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="tellsheet">Tell Sheet</button>
         <button class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="watchlist">Watchlist</button>
+        <button id="etf-pill" class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="etf" title="Exchange-traded funds — sourced live from the ETF Google Sheet (add/remove tickers there)">ETFs <span id="etf-count" class="text-xs text-slate-500"></span></button>
         <button id="bus-research-pill" class="filter-pill px-3 py-1.5 text-sm rounded-full border border-slate-300 bg-white" data-filter="bus_research" title="Tickers from Trent's Investment Research">BUS! Research <span id="bus-research-count" class="text-xs text-slate-500"></span></button>
         <div class="w-px h-6 bg-slate-300 mx-1"></div>
         <button id="sort-conviction" class="px-3 py-1.5 text-sm rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors" title="Sort by composite conviction score: most-bullish at top, most-bearish at bottom">
@@ -764,12 +765,15 @@
         const mood = r.mood || 'GRIND';
         const isCustom = r.list_type === 'custom';
         const isBus    = r.list_type === 'bus_research';
+        const isEtf    = r.list_type === 'etf';
         const listLabel = isCustom ? 'Custom'
           : isBus ? 'BUS! Research'
+          : isEtf ? 'ETF'
           : r.list_type === 'tellsheet' ? 'Tell Sheet'
           : 'Watchlist';
         const listColor = isCustom ? 'bg-amber-100 text-amber-800'
           : isBus ? 'bg-emerald-100 text-emerald-800'
+          : isEtf ? 'bg-indigo-100 text-indigo-800'
           : r.list_type === 'tellsheet' ? 'bg-blue-50 text-blue-700'
           : 'bg-slate-100 text-slate-700';
         // Custom rows get a colored left border + soft background so the
@@ -1425,6 +1429,12 @@
             enriched._entryQuality = entryQuality(enriched);
             return enriched;
           });
+          // ETF pill count — number of scored ETF rows currently loaded.
+          const etfCountEl = document.getElementById('etf-count');
+          if (etfCountEl) {
+            const etfCount = allScores.filter(r => r.list_type === 'etf').length;
+            etfCountEl.textContent = etfCount ? `(${etfCount})` : '';
+          }
           // Count stale rows for the global header warning.
           const staleCount = allScores.filter(r => r._isStale).length;
           if (staleCount > 0) {

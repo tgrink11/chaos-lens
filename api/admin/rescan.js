@@ -38,6 +38,7 @@ import {
   weekdaysSince,
   STALE_THRESHOLD_WEEKDAYS,
 } from '../../src/server/kerry-scoring.js';
+import { loadEtfSet } from '../../src/server/etf-symbols.js';
 
 const FMP_KEY = process.env.FMP_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -166,6 +167,10 @@ export default async function handler(req, res) {
 
   const startedAt = Date.now();
   const existing = await fetchExistingRows(targets);
+  // Live ETF universe — only needed to categorize a never-scored symbol, so
+  // skip the sheet fetch when every target already has a row.
+  const needEtfLookup = targets.some(sym => !existing.get(sym));
+  const etfSet = needEtfLookup ? await loadEtfSet() : new Set();
   const env = { fmpKey: FMP_KEY, chaosLensUrl: CHAOS_LENS_URL };
 
   // Run sequentially to keep FMP politely paced — 50 symbols × ~500ms each
@@ -174,7 +179,11 @@ export default async function handler(req, res) {
   const failed = [];
   for (const sym of targets) {
     const existingRow = existing.get(sym);
-    const listType = existingRow?.list_type || 'watchlist';
+    // Prefer the symbol's existing category. For a never-scored symbol, fall
+    // back to 'etf' if it's in the ETF list, otherwise 'watchlist' (the old
+    // default). This lets a newly-added ETF be scored on demand with the
+    // right list_type instead of waiting for the next nightly cron.
+    const listType = existingRow?.list_type || (etfSet.has(sym) ? 'etf' : 'watchlist');
     const prevHistory = existingRow?.conviction_history || [];
     const result = await scoreSymbol(sym, listType, prevHistory, env);
     if (result.ok) {

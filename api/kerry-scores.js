@@ -5,7 +5,8 @@
  * behavioral-market-agent (via cross-origin fetch).
  *
  * Optional query params:
- *   ?list=tellsheet | watchlist   — filter to one list (default: both)
+ *   ?list=tellsheet | watchlist | etf | bus_research
+ *       — filter to one list (default: all lists)
  *
  * CORS: explicitly allow the behavioral-market-agent origin so the browser
  * can read this endpoint from there.
@@ -41,7 +42,11 @@ export default async function handler(req, res) {
   }
 
   const listFilter = req.query.list;
-  const validList = listFilter === 'tellsheet' || listFilter === 'watchlist';
+  const validList =
+    listFilter === 'tellsheet' ||
+    listFilter === 'watchlist' ||
+    listFilter === 'etf' ||
+    listFilter === 'bus_research';
 
   // Build PostgREST query. Order by list_type then symbol so the response is
   // deterministic across calls — easier to diff on the consumer side.

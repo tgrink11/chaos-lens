@@ -23,6 +23,7 @@ import {
   weekdaysSince,
   STALE_THRESHOLD_WEEKDAYS,
 } from '../../src/server/kerry-scoring.js';
+import { loadEtfSymbols } from '../../src/server/etf-symbols.js';
 
 const SHEET_ID = process.env.KERRY_SHEET_ID;
 const SHEET_GID = process.env.KERRY_SHEET_GID || '0';
@@ -198,21 +199,31 @@ export default async function handler(req, res) {
   try {
     const lists = await loadSymbols();
     const busAll = await loadBusResearchSymbols();
-    const tellSet = new Set(lists.tellsheet);
-    const watchSet = new Set(lists.watchlist);
-    const busOnly = busAll.filter(s => !tellSet.has(s) && !watchSet.has(s));
+    // ETF category — loaded live from the ETF Google Sheet (see
+    // src/server/etf-symbols.js). A symbol lives in exactly one category —
+    // kerry_scores is keyed on symbol — so ETF tickers are removed from the
+    // Tell Sheet / Watchlist / BUS! sets and scored only as 'etf'.
+    const etfList = await loadEtfSymbols();
+    const etfSet = new Set(etfList);
+    const tellsheet = lists.tellsheet.filter(s => !etfSet.has(s));
+    const watchlist = lists.watchlist.filter(s => !etfSet.has(s));
+    const tellSet = new Set(tellsheet);
+    const watchSet = new Set(watchlist);
+    const busOnly = busAll.filter(s => !tellSet.has(s) && !watchSet.has(s) && !etfSet.has(s));
 
     const totals = {
-      tellsheet: lists.tellsheet.length,
-      watchlist: lists.watchlist.length,
+      tellsheet: tellsheet.length,
+      watchlist: watchlist.length,
+      etf: etfList.length,
       bus_research_total: busAll.length,
       bus_research_only: busOnly.length,
     };
 
     const existing = await fetchExistingScores();
 
-    const tellResult = await scoreInBatches(lists.tellsheet, 'tellsheet', existing);
-    const watchResult = await scoreInBatches(lists.watchlist, 'watchlist', existing);
+    const tellResult = await scoreInBatches(tellsheet, 'tellsheet', existing);
+    const watchResult = await scoreInBatches(watchlist, 'watchlist', existing);
+    const etfResult = await scoreInBatches(etfList, 'etf', existing);
     const busResult = await scoreInBatches(busOnly, 'bus_research', existing);
 
     const attach = (row) => ({
@@ -221,10 +232,12 @@ export default async function handler(req, res) {
     });
     const tellRows = tellResult.scored.map(attach);
     const watchRows = watchResult.scored.map(attach);
+    const etfRows = etfResult.scored.map(attach);
     const busRows = busResult.scored.map(attach);
 
     await upsertScores(tellRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
     await upsertScores(watchRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
+    await upsertScores(etfRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
     await upsertScores(busRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
 
     // Post-scan staleness audit. Any row still >3 weekdays old means
@@ -239,6 +252,7 @@ export default async function handler(req, res) {
     const allFailures = [
       ...tellResult.failures.map(f => ({ ...f, list_type: 'tellsheet' })),
       ...watchResult.failures.map(f => ({ ...f, list_type: 'watchlist' })),
+      ...etfResult.failures.map(f => ({ ...f, list_type: 'etf' })),
       ...busResult.failures.map(f => ({ ...f, list_type: 'bus_research' })),
     ];
 
@@ -248,6 +262,7 @@ export default async function handler(req, res) {
       totals,
       tellsheet:    { scored: tellResult.scored.length,  failed: tellResult.failures.length },
       watchlist:    { scored: watchResult.scored.length, failed: watchResult.failures.length },
+      etf:          { scored: etfResult.scored.length,   failed: etfResult.failures.length },
       bus_research: { scored: busResult.scored.length,   failed: busResult.failures.length },
       failures: allFailures, // every per-symbol failure with reason
       stale: {
