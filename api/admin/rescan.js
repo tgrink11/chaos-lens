@@ -166,6 +166,7 @@ export default async function handler(req, res) {
   }
 
   const startedAt = Date.now();
+  try {
   const existing = await fetchExistingRows(targets);
   // Live ETF universe — only needed to categorize a never-scored symbol, so
   // skip the sheet fetch when every target already has a row.
@@ -231,4 +232,11 @@ export default async function handler(req, res) {
     failures: failed,
     upsertError,
   });
+  } catch (e) {
+    // Surface the real reason instead of an opaque empty 500. A common cause
+    // is the function exceeding maxDuration on a large batch — keep batches
+    // small (or rely on the nightly cron) if you see a timeout here.
+    console.error('[admin/rescan] top-level error:', e);
+    return res.status(500).json({ error: e.message, elapsedMs: Date.now() - startedAt });
+  }
 }
