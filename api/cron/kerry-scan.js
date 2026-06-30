@@ -28,12 +28,24 @@ import { loadEtfSymbols } from '../../src/server/etf-symbols.js';
 const SHEET_ID = process.env.KERRY_SHEET_ID;
 const SHEET_GID = process.env.KERRY_SHEET_GID || '0';
 
-// Ranges agreed with the sheet maintainer:
-//   - Tell Sheet:  A5:A58
-//   - Watchlist:   A73:A148  AND  A160:A163
+// Scan ranges in column A of the Kerry sheet. The Tell Sheet occupies the
+// top block, the Watchlist the lower block.
+//
+// These are deliberately WIDER than the original tight ranges (was tellsheet
+// A5:A58, watchlist A73:A148 + A160:A163). When the maintainer inserts rows in
+// the sheet, symbols at the bottom of each block get pushed *down* past a tight
+// boundary and silently fall out of the nightly scan — that's how EEM/MARA/ZS
+// and 8 others froze for 17 weekdays. The headroom below each block absorbs
+// future inserts so symbols stop disappearing.
+//
+// Safe to over-reach: fetchSheetRange() filters every cell through
+// /^[A-Z]{1,5}$/, so headers, blanks, and section labels are dropped — only
+// real ticker-shaped cells survive. The Tell Sheet block ends before A73, and
+// because inserts only push the Watchlist *later*, extending the Tell Sheet
+// down to A72 cannot capture a Watchlist name.
 const RANGES = {
-  tellsheet: ['A5:A58'],
-  watchlist: ['A73:A148', 'A160:A163'],
+  tellsheet: ['A5:A72'],
+  watchlist: ['A73:A200'],
 };
 
 const FMP_KEY = process.env.FMP_KEY;
@@ -48,6 +60,37 @@ const BUS_RESEARCH_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 250;
+
+// Per-symbol retry. Most cron "failures" are transient FMP rate-limits /
+// timeouts during the big batch run — a symbol that fails once almost always
+// succeeds a moment later. Without a retry, one hiccup freezes that symbol's
+// row until a future scan happens to succeed (the CORZ-stuck-22-days pattern).
+// We try each symbol up to MAX_SCORE_ATTEMPTS times with linear backoff.
+const MAX_SCORE_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 600;
+
+/**
+ * Score one symbol, retrying on either a thrown error or an { ok:false }
+ * result. Never throws — returns the last { ok:false, error } if all attempts
+ * fail, with the attempt count folded into the error string.
+ */
+async function scoreSymbolWithRetry(sym, listType, prevHistory, env) {
+  let lastErr = 'unknown error';
+  for (let attempt = 1; attempt <= MAX_SCORE_ATTEMPTS; attempt++) {
+    try {
+      const r = await scoreSymbol(sym, listType, prevHistory, env);
+      if (r.ok) return r;
+      lastErr = r.error;
+    } catch (e) {
+      lastErr = e?.message || String(e);
+    }
+    if (attempt < MAX_SCORE_ATTEMPTS) {
+      console.warn(`[kerry-scan] ${sym} (${listType}) attempt ${attempt}/${MAX_SCORE_ATTEMPTS} failed: ${lastErr} — retrying`);
+      await new Promise(r => setTimeout(r, RETRY_BASE_DELAY_MS * attempt));
+    }
+  }
+  return { ok: false, error: `failed after ${MAX_SCORE_ATTEMPTS} attempts: ${lastErr}` };
+}
 
 async function fetchSheetRange(range) {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${SHEET_GID}&range=${range}&tqx=out:csv`;
@@ -130,7 +173,7 @@ async function scoreInBatches(symbols, listType, existing) {
     const results = await Promise.allSettled(
       batch.map(async (sym) => {
         const prevHistory = existing?.get(sym)?.conviction_history || [];
-        const r = await scoreSymbol(sym, listType, prevHistory, env);
+        const r = await scoreSymbolWithRetry(sym, listType, prevHistory, env);
         return { sym, r };
       })
     );
@@ -241,12 +284,31 @@ export default async function handler(req, res) {
     await upsertScores(busRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
 
     // Post-scan staleness audit. Any row still >3 weekdays old means
-    // the cron silently failed on it (either tonight or on previous
-    // runs). This count goes into the response and lets us drive a
-    // follow-up /api/admin/rescan?stale=1 if needed.
+    // the cron silently failed on it (either tonight or on previous runs).
     const staleRows = await findStaleRows();
     if (staleRows.length > 0) {
       console.warn(`[kerry-scan] ${staleRows.length} stale rows after upsert:`, staleRows.slice(0, 10));
+    }
+
+    // Self-healing auto-sweep. Re-score the stale rows (grouped by their
+    // existing list_type) using the same retrying scorer, then upsert the
+    // successes. This is the backstop that stops a symbol from silently
+    // freezing for weeks even if the retry above didn't catch it tonight.
+    const sweepResult = { found: staleRows.length, scored: 0, failures: [] };
+    if (staleRows.length > 0) {
+      const byList = {};
+      for (const r of staleRows) (byList[r.list_type] ||= []).push(r.symbol);
+      const sweptRows = [];
+      for (const [lt, syms] of Object.entries(byList)) {
+        const res = await scoreInBatches(syms, lt, existing);
+        sweptRows.push(...res.scored.map(attach));
+        sweepResult.failures.push(...res.failures.map(f => ({ ...f, list_type: lt })));
+      }
+      if (sweptRows.length > 0) {
+        await upsertScores(sweptRows, { supabaseUrl: SUPABASE_URL, supabaseKey: SUPABASE_KEY });
+      }
+      sweepResult.scored = sweptRows.length;
+      console.warn(`[kerry-scan] auto-sweep re-scored ${sweepResult.scored}/${staleRows.length} stale rows; ${sweepResult.failures.length} still failing`);
     }
 
     const allFailures = [
@@ -254,6 +316,7 @@ export default async function handler(req, res) {
       ...watchResult.failures.map(f => ({ ...f, list_type: 'watchlist' })),
       ...etfResult.failures.map(f => ({ ...f, list_type: 'etf' })),
       ...busResult.failures.map(f => ({ ...f, list_type: 'bus_research' })),
+      ...sweepResult.failures.map(f => ({ ...f, swept: true })),
     ];
 
     return res.status(200).json({
@@ -269,6 +332,12 @@ export default async function handler(req, res) {
         count: staleRows.length,
         threshold_weekdays: STALE_THRESHOLD_WEEKDAYS,
         symbols: staleRows.slice(0, 50), // cap at 50 to keep response tidy
+      },
+      sweep: {
+        found: sweepResult.found,            // stale rows detected this run
+        healed: sweepResult.scored,          // re-scored + upserted successfully
+        stillFailing: sweepResult.failures.length,
+        stillFailingSymbols: sweepResult.failures.map(f => f.symbol).slice(0, 50),
       },
     });
   } catch (e) {
