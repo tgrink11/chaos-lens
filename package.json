@@ -1,0 +1,12 @@
+{
+  "name": "chaos-lens",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BUS! Chaos Lens fractal scan engine — Vercel serverless function.",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
